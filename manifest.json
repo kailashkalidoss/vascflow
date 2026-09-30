@@ -1,0 +1,13 @@
+{
+  "name": "VascFlow — Ankle-Brachial Index Wellness Log",
+  "short_name": "VascFlow",
+  "description": "VascFlow: at-home personal wellness tracking for arm and ankle systolic pressures with ABI calculation, history and PDF export. Not a medical device.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F1F6FD",
+  "theme_color": "#2563EB",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

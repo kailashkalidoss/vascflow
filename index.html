@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VascFlow — Ankle-Brachial Index Wellness Log</title>
+<meta name="description" content="VascFlow: at-home personal wellness tracking for arm and ankle systolic pressures with ABI calculation, history and PDF export. Not a medical device." />
+<meta name="theme-color" content="#2563EB" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/svg+xml" href="icon.svg" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- GLOBAL DISCLAIMER BANNER (persistent, all screens) -->
+<div class="disclaimer-banner" role="note" aria-label="Wellness disclaimer">
+  <span aria-hidden="true">⚠️</span>
+  <p><strong>Wellness tracking only — NOT a medical device.</strong> Do not use for diagnosis or treatment decisions. Person measured should be supine, rested &amp; calm. Consult a qualified clinician for vascular concerns.</p>
+</div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">🌊</span>
+    <div>
+      <h1>VascFlow</h1>
+      <p>Ankle-Brachial Index · at-home wellness log</p>
+    </div>
+  </div>
+  <div class="top-actions">
+    <span id="methodPill" class="method-pill" title="Measurement method">Automatic</span>
+    <button id="historyBtnTop" class="btn ghost small">History</button>
+    <button id="resetAllBtn" class="btn ghost small">Reset</button>
+  </div>
+</header>
+
+<!-- WIZARD PROGRESS (segmented pills) -->
+<nav class="wizard-steps" aria-label="Progress">
+  <div class="step active" data-goto="0"><span class="dot">0</span><span class="lbl">Setup</span></div>
+  <div class="step" data-goto="1"><span class="dot">1</span><span class="lbl">Arms ×3</span></div>
+  <div class="step" data-goto="2"><span class="dot">2</span><span class="lbl">Right Ankle ×3</span></div>
+  <div class="step" data-goto="3"><span class="dot">3</span><span class="lbl">Left Ankle ×3</span></div>
+  <div class="step" data-goto="4"><span class="dot">4</span><span class="lbl">Results &amp; PDF</span></div>
+</nav>
+
+<!-- Manual-mode OCR warning (persistent whenever manual is selected) -->
+<div id="manualBanner" class="manual-banner" hidden role="alert">
+  ⚠️ <strong>Manual method selected — camera scanning is disabled.</strong> Enter all systolic values by hand from your sphygmomanometer dial.
+</div>
+
+<main>
+  <!-- ============ SCREEN 0: SETUP ============ -->
+  <section id="screen-0" class="screen active" aria-labelledby="s0-title">
+    <div class="card">
+      <p class="kicker">Setup · measurement method</p>
+      <h2 id="s0-title">How will you measure?</h2>
+      <p class="muted">Choose your device. This is an <strong>at-home setup</strong>: the person being measured should lie <strong>supine (flat on their back), well rested and calm</strong>.</p>
+
+      <div class="method-grid" role="radiogroup" aria-label="Measurement method">
+        <label class="method-card" id="methodAutoCard">
+          <input type="radio" name="method" value="auto" checked />
+          <div class="method-body">
+            <span class="method-icon" aria-hidden="true">🤖</span>
+            <strong>Automatic</strong>
+            <span class="muted small">Omron or similar oscillometric monitor. Camera scanning <em>enabled</em> — OCR reads the <strong>systolic (higher)</strong> number.</span>
+          </div>
+        </label>
+        <label class="method-card" id="methodManualCard">
+          <input type="radio" name="method" value="manual" />
+          <div class="method-body">
+            <span class="method-icon" aria-hidden="true">🩺</span>
+            <strong>Manual</strong>
+            <span class="muted small">Sphygmomanometer + stethoscope. Camera scanning <em>disabled</em> — all values entered by hand.</span>
+          </div>
+        </label>
+      </div>
+
+      <div id="manualWarnBox" class="warn-box" hidden>
+        ⚠️ <strong>Manual mode:</strong> camera / OCR scanning is turned off throughout the app. Read the <strong>systolic (top / first Korotkoff sound)</strong> value from your dial and type it in.
+      </div>
+
+      <div class="guide-box">
+        <div>
+          <h3>At-home positioning checklist</h3>
+          <ul class="guide-list">
+            <li>Person lies <strong>supine</strong>, legs uncrossed, arms at heart level.</li>
+            <li><strong>Rest 5–10 minutes</strong>, calm and quiet — no talking or moving during readings.</li>
+            <li>Use the correct cuff size; arm cuff <strong>1–2 cm above the elbow crease</strong>.</li>
+            <li>Ankle cuff on the lower leg <strong>just above the malleoli</strong> (ankle bones) — no Doppler needed.</li>
+            <li>Take <strong>3 readings per site</strong>; the app keeps the <strong>highest</strong>.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="nav-row">
+        <span></span>
+        <button class="btn primary" id="toScreen1">Next: Arm Pressures →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN 1: ARMS ×3 ============ -->
+  <section id="screen-1" class="screen" aria-labelledby="s1-title">
+    <div class="card">
+      <p class="kicker">Baseline</p>
+      <h2 id="s1-title">Arm Pressure Baseline <span class="sub">(Brachial Arteries · 3 readings each)</span></h2>
+      <p class="muted">Enter <strong>systolic (top number)</strong> only, <strong>3 readings per arm</strong>. The app keeps the <strong>highest</strong> of each trio; the higher arm becomes the reference: <code>ABI = highest ankle ÷ highest arm</code>.</p>
+
+      <div class="site-block">
+        <div class="site-head"><h3>Right Arm <span class="unit">mmHg · systolic</span></h3><span class="max-badge" id="maxArmR">max —</span></div>
+        <div class="triple-grid">
+          <div class="field-block"><label for="armR1">Reading 1</label><div class="input-row"><input id="armR1" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 120" /><button class="btn secondary small" data-scan="armR1">📷</button></div></div>
+          <div class="field-block"><label for="armR2">Reading 2</label><div class="input-row"><input id="armR2" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 122" /><button class="btn secondary small" data-scan="armR2">📷</button></div></div>
+          <div class="field-block"><label for="armR3">Reading 3</label><div class="input-row"><input id="armR3" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 119" /><button class="btn secondary small" data-scan="armR3">📷</button></div></div>
+        </div>
+      </div>
+
+      <div class="site-block">
+        <div class="site-head"><h3>Left Arm <span class="unit">mmHg · systolic</span></h3><span class="max-badge" id="maxArmL">max —</span></div>
+        <div class="triple-grid">
+          <div class="field-block"><label for="armL1">Reading 1</label><div class="input-row"><input id="armL1" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 118" /><button class="btn secondary small" data-scan="armL1">📷</button></div></div>
+          <div class="field-block"><label for="armL2">Reading 2</label><div class="input-row"><input id="armL2" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 121" /><button class="btn secondary small" data-scan="armL2">📷</button></div></div>
+          <div class="field-block"><label for="armL3">Reading 3</label><div class="input-row"><input id="armL3" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 117" /><button class="btn secondary small" data-scan="armL3">📷</button></div></div>
+        </div>
+      </div>
+
+      <div class="guide-box">
+        <div class="guide-svg" aria-hidden="true">
+          <svg viewBox="0 0 200 150" width="100%" height="130" role="img" aria-label="Arm cuff placement diagram">
+            <rect x="70" y="10" width="60" height="110" rx="28" fill="#dbe1ff" stroke="#1D4ED8" stroke-width="2"/>
+            <rect x="66" y="38" width="68" height="34" rx="8" fill="#2563EB" opacity="0.9"/>
+            <text x="100" y="60" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">CUFF</text>
+            <line x1="40" y1="95" x2="160" y2="95" stroke="#F43F5E" stroke-dasharray="5 4" stroke-width="1.5"/>
+            <text x="100" y="110" text-anchor="middle" font-size="10" fill="#0b1c30">1–2 cm above elbow crease</text>
+            <circle cx="100" cy="95" r="3" fill="#F43F5E"/>
+          </svg>
+        </div>
+        <div>
+          <h3>Correct cuff placement</h3>
+          <ul class="guide-list">
+            <li>Supine, arm at heart level, correct cuff size.</li>
+            <li>Cuff <strong>1–2 cm above the elbow crease</strong>.</li>
+            <li>Wait ~1 minute between the 3 readings.</li>
+            <li>Record the <strong>systolic (top)</strong> number only.</li>
+          </ul>
+        </div>
+      </div>
+
+      <p class="error" id="err1" hidden></p>
+      <div class="nav-row">
+        <button class="btn ghost" data-goto-btn="0">← Back: Setup</button>
+        <button class="btn primary" id="toScreen2">Next: Right Ankle →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN 2: RIGHT ANKLE ×3 ============ -->
+  <section id="screen-2" class="screen" aria-labelledby="s2-title">
+    <div class="card">
+      <p class="kicker">Right ankle</p>
+      <h2 id="s2-title">Right Ankle Pressure <span class="sub">(consolidated · cuff just above malleoli)</span></h2>
+      <p class="muted">One consolidated series — <strong>no hand-held Doppler, no DP/PT split</strong>. Place the cuff on the lower leg <strong>just above the ankle bones (malleoli)</strong>, take <strong>3 systolic readings</strong>; the highest is used.</p>
+
+      <div class="site-block">
+        <div class="site-head"><h3>Right Ankle <span class="unit">mmHg · systolic</span></h3><span class="max-badge" id="maxAnkR">max —</span></div>
+        <div class="triple-grid">
+          <div class="field-block"><label for="ankR1">Reading 1</label><div class="input-row"><input id="ankR1" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 130" /><button class="btn secondary small" data-scan="ankR1">📷</button></div></div>
+          <div class="field-block"><label for="ankR2">Reading 2</label><div class="input-row"><input id="ankR2" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 132" /><button class="btn secondary small" data-scan="ankR2">📷</button></div></div>
+          <div class="field-block"><label for="ankR3">Reading 3</label><div class="input-row"><input id="ankR3" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 128" /><button class="btn secondary small" data-scan="ankR3">📷</button></div></div>
+        </div>
+      </div>
+
+      <div class="guide-box">
+        <div class="guide-svg" aria-hidden="true">
+          <svg viewBox="0 0 200 160" width="100%" height="140" role="img" aria-label="Right ankle cuff placement just above malleoli">
+            <rect x="78" y="8" width="44" height="90" rx="16" fill="#eff4ff" stroke="#1D4ED8" stroke-width="2"/>
+            <rect x="72" y="66" width="56" height="30" rx="8" fill="#2563EB" opacity="0.9"/>
+            <text x="100" y="86" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">CUFF</text>
+            <circle cx="84" cy="118" r="6" fill="#F43F5E"/>
+            <circle cx="116" cy="118" r="6" fill="#F43F5E"/>
+            <text x="100" y="140" text-anchor="middle" font-size="10" font-weight="bold" fill="#0b1c30">cuff just above malleoli</text>
+            <ellipse cx="100" cy="122" rx="30" ry="10" fill="none" stroke="#64748B" stroke-width="1.5" stroke-dasharray="4 3"/>
+          </svg>
+        </div>
+        <div>
+          <h3>Right ankle cuff placement</h3>
+          <ul class="guide-list">
+            <li>Stay <strong>supine</strong> — same position as arms.</li>
+            <li>Cuff snug on the lower leg <strong>just above the malleoli</strong>.</li>
+            <li>No Doppler probe needed — one consolidated reading site.</li>
+            <li>Highest of the 3 readings is used.</li>
+          </ul>
+        </div>
+      </div>
+
+      <p class="error" id="err2" hidden></p>
+      <div class="nav-row">
+        <button class="btn ghost" data-goto-btn="1">← Back: Arms</button>
+        <button class="btn primary" id="toScreen3">Next: Left Ankle →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN 3: LEFT ANKLE ×3 ============ -->
+  <section id="screen-3" class="screen" aria-labelledby="s3-title">
+    <div class="card">
+      <p class="kicker">Left ankle</p>
+      <h2 id="s3-title">Left Ankle Pressure <span class="sub">(consolidated · cuff just above malleoli)</span></h2>
+      <p class="muted">Same consolidated protocol — cuff <strong>just above the malleoli</strong>, <strong>3 systolic readings</strong>, highest kept. No Doppler.</p>
+
+      <div class="site-block">
+        <div class="site-head"><h3>Left Ankle <span class="unit">mmHg · systolic</span></h3><span class="max-badge" id="maxAnkL">max —</span></div>
+        <div class="triple-grid">
+          <div class="field-block"><label for="ankL1">Reading 1</label><div class="input-row"><input id="ankL1" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 126" /><button class="btn secondary small" data-scan="ankL1">📷</button></div></div>
+          <div class="field-block"><label for="ankL2">Reading 2</label><div class="input-row"><input id="ankL2" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 129" /><button class="btn secondary small" data-scan="ankL2">📷</button></div></div>
+          <div class="field-block"><label for="ankL3">Reading 3</label><div class="input-row"><input id="ankL3" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 124" /><button class="btn secondary small" data-scan="ankL3">📷</button></div></div>
+        </div>
+      </div>
+
+      <div class="guide-box">
+        <div class="guide-svg" aria-hidden="true">
+          <svg viewBox="0 0 200 160" width="100%" height="140" role="img" aria-label="Left ankle cuff placement just above malleoli">
+            <rect x="78" y="8" width="44" height="90" rx="16" fill="#eff4ff" stroke="#1D4ED8" stroke-width="2"/>
+            <rect x="72" y="66" width="56" height="30" rx="8" fill="#2563EB" opacity="0.9"/>
+            <text x="100" y="86" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">CUFF</text>
+            <circle cx="84" cy="118" r="6" fill="#F43F5E"/>
+            <circle cx="116" cy="118" r="6" fill="#F43F5E"/>
+            <text x="100" y="140" text-anchor="middle" font-size="10" font-weight="bold" fill="#0b1c30">cuff just above malleoli</text>
+            <ellipse cx="100" cy="122" rx="30" ry="10" fill="none" stroke="#64748B" stroke-width="1.5" stroke-dasharray="4 3"/>
+          </svg>
+        </div>
+        <div>
+          <h3>Left ankle cuff placement</h3>
+          <ul class="guide-list">
+            <li>Same supine position as the right leg.</li>
+            <li>Cuff <strong>just above the malleoli</strong>, same cuff size.</li>
+            <li>Wait ~1 minute between the 3 readings.</li>
+            <li>Highest of the 3 readings is used.</li>
+          </ul>
+        </div>
+      </div>
+
+      <p class="error" id="err3" hidden></p>
+      <div class="nav-row">
+        <button class="btn ghost" data-goto-btn="2">← Back: Right Ankle</button>
+        <button class="btn primary" id="toResults">Calculate &amp; View Results →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN 4: RESULTS ============ -->
+  <section id="screen-4" class="screen" aria-labelledby="s4-title">
+    <div class="card result-hero">
+      <p class="kicker">Results · analysis</p>
+      <h2 id="s4-title">Results &amp; Analysis</h2>
+      <div id="methodRecap" class="method-recap">Method: —</div>
+      <div id="refArmBox" class="ref-box">Enter values to calculate.</div>
+
+      <div class="grid-2">
+        <div class="abi-card" id="cardR">
+          <div class="abi-head"><h3>Right Leg ABI</h3><span class="badge" id="badgeR">—</span></div>
+          <div class="abi-score" id="scoreR">—</div>
+          <p class="muted small" id="detailR"></p>
+          <div class="gauge" aria-hidden="true">
+            <div class="gauge-bar"><div class="pointer" id="ptrR"></div></div>
+            <div class="gauge-scale"><span style="left:0%">0</span><span style="left:56.25%">0.90</span><span style="left:62.5%">1.00</span><span style="left:87.5%">1.40</span><span style="left:100%">1.6+</span></div>
+          </div>
+        </div>
+        <div class="abi-card" id="cardL">
+          <div class="abi-head"><h3>Left Leg ABI</h3><span class="badge" id="badgeL">—</span></div>
+          <div class="abi-score" id="scoreL">—</div>
+          <p class="muted small" id="detailL"></p>
+          <div class="gauge" aria-hidden="true">
+            <div class="gauge-bar"><div class="pointer" id="ptrL"></div></div>
+            <div class="gauge-scale"><span style="left:0%">0</span><span style="left:56.25%">0.90</span><span style="left:62.5%">1.00</span><span style="left:87.5%">1.40</span><span style="left:100%">1.6+</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="breakdownBox" class="breakdown"></div>
+
+      <div class="legend">
+        <span><i class="key k-red"></i>Reduced flow (&lt;0.90)</span>
+        <span><i class="key k-amber"></i>Borderline (0.90–0.99)</span>
+        <span><i class="key k-green"></i>Normal (1.00–1.40)</span>
+        <span><i class="key k-blue"></i>High / stiff (&gt;1.40)</span>
+      </div>
+      <p class="muted small">Categories are wellness labels for self-tracking only — not diagnostic thresholds. If you notice symptoms (leg pain when walking, non-healing sores, cold/pale feet), seek professional care promptly.</p>
+
+      <div class="field-block">
+        <label for="notes">Personal wellness notes (optional — included in PDF)</label>
+        <textarea id="notes" rows="2" placeholder="e.g. supine 10 min, automatic cuff, walked 20 min today…"></textarea>
+      </div>
+
+      <div class="action-row">
+        <button class="btn primary" id="saveSessionBtn">💾 Save Session</button>
+        <button class="btn secondary" id="exportPdfBtn">📄 Export PDF Report</button>
+      </div>
+
+      <h3>Session history <span class="muted small">(this browser only)</span></h3>
+      <ul id="historyList" class="log"></ul>
+
+      <div class="nav-row">
+        <button class="btn ghost" data-goto-btn="3">← Edit Input Values</button>
+        <button class="btn ghost" id="newCalcBtn">↺ Start New Calculation</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- SCANNER MODAL (Automatic mode only) -->
+<div id="scanModal" class="overlay" hidden>
+  <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="scanTitle">
+    <p class="kicker">AI vision · monitor scanner</p>
+    <h2 id="scanTitle">Scan BP monitor</h2>
+    <p class="muted small" id="scanTarget">Target: —</p>
+    <p class="sys-note">🔢 <strong>Systolic only</strong> — automatic monitors show two numbers; we keep the <strong>higher (top / SYS)</strong> value.</p>
+    <div class="scan-grid">
+      <div>
+        <video id="scanVideo" playsinline muted></video>
+        <div class="scan-btns">
+          <button class="btn secondary small" id="startCamBtn">Start camera</button>
+          <button class="btn ghost small" id="captureBtn" disabled>Capture</button>
+        </div>
+        <canvas id="scanCanvas" hidden></canvas>
+      </div>
+      <div>
+        <label class="upload-label">Or upload a photo
+          <input type="file" id="scanFile" accept="image/*" />
+        </label>
+        <img id="scanPreview" alt="Monitor photo preview" hidden />
+        <p class="muted small">OCR runs on-device (needs internet once to load). Detected candidates are sorted <strong>highest first</strong> — tap the systolic value.</p>
+        <div id="ocrStatus" class="muted small"></div>
+        <div id="ocrChips" class="chips"></div>
+        <div class="field-block">
+          <label for="scanManual">Manual entry for this reading</label>
+          <div class="input-row">
+            <input id="scanManual" type="number" min="40" max="300" placeholder="e.g. 122" />
+            <button class="btn primary small" id="scanApplyBtn">Use value</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="bo-actions">
+      <button class="btn ghost" id="scanCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY overlay -->
+<div id="historyOverlay" class="overlay" hidden>
+  <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="histTitle">
+    <h2 id="histTitle">Saved sessions</h2>
+    <ul id="historyListFull" class="log"></ul>
+    <div class="bo-actions">
+      <button class="btn ghost small" id="clearHistoryBtn">Clear all</button>
+      <button class="btn primary small" id="historyCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<footer><p>VascFlow PWA · works offline · data stays in this browser (localStorage) · wellness only, not a medical device</p></footer>
+
+<script src="app.js"></script>
+<script>
+window.addEventListener('load', function () {
+  if ('serviceWorker' in navigator && window.location.protocol.indexOf('http') === 0) {
+    try { navigator.serviceWorker.register('sw.js').catch(function () {}); } catch (e) {}
+  }
+  setTimeout(function () {
+    if (!window.__vascBooted) {
+      var d = document.createElement('div');
+      d.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:999;background:#ba1a1a;color:#fff;padding:12px 16px;font:14px sans-serif;text-align:center';
+      d.textContent = 'VascFlow could not start: JavaScript failed to load. Serve via http://localhost:8000 (not file://) and hard-refresh.';
+      document.body.appendChild(d);
+    }
+  }, 1500);
+});
+</script>
+</body>
+</html>
