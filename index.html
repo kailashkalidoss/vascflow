@@ -31,8 +31,9 @@
     </div>
   </div>
   <div class="top-actions">
-    <span id="methodPill" class="method-pill" title="Measurement method">Automatic</span>
+    <span id="methodPill" class="method-pill" title="Measurement method">Select method</span>
     <button id="historyBtnTop" class="btn ghost small">History</button>
+    <button id="aboutBtnTop" class="btn ghost small">About</button>
     <button id="resetAllBtn" class="btn ghost small">Reset</button>
   </div>
 </header>
@@ -40,10 +41,11 @@
 <!-- WIZARD PROGRESS (segmented pills) -->
 <nav class="wizard-steps" aria-label="Progress">
   <div class="step active" data-goto="0"><span class="dot">0</span><span class="lbl">Setup</span></div>
-  <div class="step" data-goto="1"><span class="dot">1</span><span class="lbl">Arms ×3</span></div>
-  <div class="step" data-goto="2"><span class="dot">2</span><span class="lbl">Right Ankle ×3</span></div>
-  <div class="step" data-goto="3"><span class="dot">3</span><span class="lbl">Left Ankle ×3</span></div>
-  <div class="step" data-goto="4"><span class="dot">4</span><span class="lbl">Results &amp; PDF</span></div>
+  <div class="step" data-goto="1"><span class="dot">1</span><span class="lbl">Right Arm ×3</span></div>
+  <div class="step" data-goto="2"><span class="dot">2</span><span class="lbl">Left Arm ×3</span></div>
+  <div class="step" data-goto="3"><span class="dot">3</span><span class="lbl">Right Ankle ×3</span></div>
+  <div class="step" data-goto="4"><span class="dot">4</span><span class="lbl">Left Ankle ×3</span></div>
+  <div class="step" data-goto="5"><span class="dot">5</span><span class="lbl">Results &amp; PDF</span></div>
 </nav>
 
 <!-- Manual-mode OCR warning (persistent whenever manual is selected) -->
@@ -57,11 +59,11 @@
     <div class="card">
       <p class="kicker">Setup · measurement method</p>
       <h2 id="s0-title">How will you measure?</h2>
-      <p class="muted">Choose your device. This is an <strong>at-home setup</strong>: the person being measured should lie <strong>supine (flat on their back), well rested and calm</strong>.</p>
+      <p class="muted">Choose your device. This is an <strong>at-home setup</strong>: the person being measured must lie <strong>completely flat (supine)</strong>, well rested and calm.</p>
 
       <div class="method-grid" role="radiogroup" aria-label="Measurement method">
         <label class="method-card" id="methodAutoCard">
-          <input type="radio" name="method" value="auto" checked />
+          <input type="radio" name="method" value="auto" />
           <div class="method-body">
             <span class="method-icon" aria-hidden="true">🤖</span>
             <strong>Automatic</strong>
@@ -78,23 +80,42 @@
         </label>
       </div>
 
+      <div id="restTimerBox" class="timer-box" hidden>
+        <div>
+          <p class="kicker">Rest countdown — stay flat &amp; still</p>
+          <div id="restClock" class="rest-clock">10:00</div>
+          <p class="muted small" id="restStatus">Ready — lie flat, then press Start Measurement.</p>
+        </div>
+        <div class="timer-btns">
+          <button class="btn primary" id="startRestBtn" disabled>▶ Start Measurement</button>
+          <button class="btn ghost small" id="restRestartBtn">Restart 10:00</button>
+        </div>
+      </div>
+
       <div id="manualWarnBox" class="warn-box" hidden>
         ⚠️ <strong>Manual mode:</strong> camera / OCR scanning is turned off throughout the app. Read the <strong>systolic (top / first Korotkoff sound)</strong> value from your dial and type it in.
       </div>
 
-      <div class="guide-box">
+      <div class="guide-box two-col">
         <div>
           <h3>At-home positioning checklist</h3>
           <ul class="guide-list">
-            <li>Person lies <strong>supine</strong>, legs uncrossed, arms at heart level.</li>
-            <li><strong>Rest 5–10 minutes</strong>, calm and quiet — no talking or moving during readings.</li>
+            <li>Lie <strong>completely flat (supine)</strong> — legs uncrossed, arms at heart level.</li>
+            <li><strong>Rest a full 10 minutes</strong> before the first BP reading. <strong>Do not sit up</strong> — stay flat so your <strong>ankles and heart are at the same level</strong>.</li>
+            <li>Stay calm and quiet — no talking or moving during readings.</li>
             <li>Use the correct cuff size; arm cuff <strong>1–2 cm above the elbow crease</strong>.</li>
             <li>Ankle cuff on the lower leg <strong>just above the malleoli</strong> (ankle bones) — no Doppler needed.</li>
-            <li>Take <strong>3 readings per site</strong>; the app keeps the <strong>highest</strong>.</li>
+            <li>Take <strong>3 readings per site</strong>; the app uses the <strong>average</strong>.</li>
           </ul>
+        </div>
+        <div class="guide-media">
+          <img src="supine.gif" alt="Animation of a person lying completely flat on their back with heart and ankles at the same level" />
+          <p class="muted small">Supine — heart &amp; ankles level.</p>
         </div>
       </div>
 
+      <p class="muted small">Select Automatic or Manual above, then press <strong>Start Measurement</strong> to begin the 10:00 rest timer — you'll advance automatically, or continue manually whenever ready.</p>
+      <p class="error" id="err0" hidden></p>
       <div class="nav-row">
         <span></span>
         <button class="btn primary" id="toScreen1">Next: Arm Pressures →</button>
@@ -105,12 +126,28 @@
   <!-- ============ SCREEN 1: ARMS ×3 ============ -->
   <section id="screen-1" class="screen" aria-labelledby="s1-title">
     <div class="card">
-      <p class="kicker">Baseline</p>
-      <h2 id="s1-title">Arm Pressure Baseline <span class="sub">(Brachial Arteries · 3 readings each)</span></h2>
-      <p class="muted">Enter <strong>systolic (top number)</strong> only, <strong>3 readings per arm</strong>. The app keeps the <strong>highest</strong> of each trio; the higher arm becomes the reference: <code>ABI = highest ankle ÷ highest arm</code>.</p>
+      <p class="kicker">Right arm</p>
+      <h2 id="s1-title">Right Arm Pressure <span class="sub">(Brachial Artery · 3 readings)</span></h2>
+      <p class="muted">Enter <strong>systolic (top number)</strong> only, <strong>3 readings</strong>. The app uses the <strong>average</strong> of the trio. The <strong>higher of the two arm averages</strong> becomes the reference for the ABI calculation.</p>
+
+      <div class="guide-box two-col">
+        <div>
+          <h3>Arm cuff placement</h3>
+          <ul class="guide-list">
+            <li>Stay <strong>supine</strong>, arm at heart level, correct cuff size.</li>
+            <li>Cuff on the <strong>upper arm, 1–2 cm above the elbow crease</strong>.</li>
+            <li>Wait ~1 minute between the 3 readings.</li>
+            <li>Record the <strong>systolic (top)</strong> number only.</li>
+          </ul>
+        </div>
+        <div class="guide-media">
+          <img src="arm.gif" alt="Animation of a full arm with the cuff on the upper arm above the elbow crease" />
+          <p class="muted small">Cuff 1–2 cm above elbow crease.</p>
+        </div>
+      </div>
 
       <div class="site-block">
-        <div class="site-head"><h3>Right Arm <span class="unit">mmHg · systolic</span></h3><span class="max-badge" id="maxArmR">max —</span></div>
+        <div class="site-head"><h3>Right Arm <span class="unit">mmHg · systolic</span></h3><span class="avg-badge" id="avgArmR">avg —</span></div>
         <div class="triple-grid">
           <div class="field-block"><label for="armR1">Reading 1</label><div class="input-row"><input id="armR1" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 120" /><button class="btn secondary small" data-scan="armR1">📷</button></div></div>
           <div class="field-block"><label for="armR2">Reading 2</label><div class="input-row"><input id="armR2" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 122" /><button class="btn secondary small" data-scan="armR2">📷</button></div></div>
@@ -118,8 +155,39 @@
         </div>
       </div>
 
+      <p class="error" id="err1" hidden></p>
+      <div class="nav-row">
+        <button class="btn ghost" data-goto-btn="0">← Back: Setup</button>
+        <button class="btn primary" id="toScreen2">Next: Left Arm →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN 2: LEFT ARM ×3 ============ -->
+  <section id="screen-2" class="screen" aria-labelledby="s2-title">
+    <div class="card">
+      <p class="kicker">Left arm</p>
+      <h2 id="s2-title">Left Arm Pressure <span class="sub">(Brachial Artery · 3 readings)</span></h2>
+      <p class="muted">Enter <strong>systolic (top number)</strong> only, <strong>3 readings</strong>. The app uses the <strong>average</strong> of the trio. The <strong>higher of the two arm averages</strong> becomes the reference for the ABI calculation.</p>
+
+      <div class="guide-box two-col">
+        <div>
+          <h3>Arm cuff placement</h3>
+          <ul class="guide-list">
+            <li>Stay <strong>supine</strong>, arm at heart level, correct cuff size.</li>
+            <li>Cuff on the <strong>upper arm, 1–2 cm above the elbow crease</strong>.</li>
+            <li>Wait ~1 minute between the 3 readings.</li>
+            <li>Record the <strong>systolic (top)</strong> number only.</li>
+          </ul>
+        </div>
+        <div class="guide-media">
+          <img src="arm.gif" alt="Animation of a full arm with the cuff on the upper arm above the elbow crease" />
+          <p class="muted small">Cuff 1–2 cm above elbow crease.</p>
+        </div>
+      </div>
+
       <div class="site-block">
-        <div class="site-head"><h3>Left Arm <span class="unit">mmHg · systolic</span></h3><span class="max-badge" id="maxArmL">max —</span></div>
+        <div class="site-head"><h3>Left Arm <span class="unit">mmHg · systolic</span></h3><span class="avg-badge" id="avgArmL">avg —</span></div>
         <div class="triple-grid">
           <div class="field-block"><label for="armL1">Reading 1</label><div class="input-row"><input id="armL1" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 118" /><button class="btn secondary small" data-scan="armL1">📷</button></div></div>
           <div class="field-block"><label for="armL2">Reading 2</label><div class="input-row"><input id="armL2" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 121" /><button class="btn secondary small" data-scan="armL2">📷</button></div></div>
@@ -127,45 +195,39 @@
         </div>
       </div>
 
-      <div class="guide-box">
-        <div class="guide-svg" aria-hidden="true">
-          <svg viewBox="0 0 200 150" width="100%" height="130" role="img" aria-label="Arm cuff placement diagram">
-            <rect x="70" y="10" width="60" height="110" rx="28" fill="#dbe1ff" stroke="#1D4ED8" stroke-width="2"/>
-            <rect x="66" y="38" width="68" height="34" rx="8" fill="#2563EB" opacity="0.9"/>
-            <text x="100" y="60" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">CUFF</text>
-            <line x1="40" y1="95" x2="160" y2="95" stroke="#F43F5E" stroke-dasharray="5 4" stroke-width="1.5"/>
-            <text x="100" y="110" text-anchor="middle" font-size="10" fill="#0b1c30">1–2 cm above elbow crease</text>
-            <circle cx="100" cy="95" r="3" fill="#F43F5E"/>
-          </svg>
-        </div>
-        <div>
-          <h3>Correct cuff placement</h3>
-          <ul class="guide-list">
-            <li>Supine, arm at heart level, correct cuff size.</li>
-            <li>Cuff <strong>1–2 cm above the elbow crease</strong>.</li>
-            <li>Wait ~1 minute between the 3 readings.</li>
-            <li>Record the <strong>systolic (top)</strong> number only.</li>
-          </ul>
-        </div>
-      </div>
-
-      <p class="error" id="err1" hidden></p>
+      <p class="error" id="err2" hidden></p>
       <div class="nav-row">
-        <button class="btn ghost" data-goto-btn="0">← Back: Setup</button>
-        <button class="btn primary" id="toScreen2">Next: Right Ankle →</button>
+        <button class="btn ghost" data-goto-btn="1">← Back: Right Arm</button>
+        <button class="btn primary" id="toScreen3">Next: Right Ankle →</button>
       </div>
     </div>
   </section>
 
-  <!-- ============ SCREEN 2: RIGHT ANKLE ×3 ============ -->
-  <section id="screen-2" class="screen" aria-labelledby="s2-title">
+  <!-- ============ SCREEN 3: RIGHT ANKLE ×3 ============ -->
+  <section id="screen-3" class="screen" aria-labelledby="s3-title">
     <div class="card">
       <p class="kicker">Right ankle</p>
-      <h2 id="s2-title">Right Ankle Pressure <span class="sub">(consolidated · cuff just above malleoli)</span></h2>
-      <p class="muted">One consolidated series — <strong>no hand-held Doppler, no DP/PT split</strong>. Place the cuff on the lower leg <strong>just above the ankle bones (malleoli)</strong>, take <strong>3 systolic readings</strong>; the highest is used.</p>
+      <h2 id="s3-title">Right Ankle Pressure <span class="sub">(consolidated · cuff just above malleoli)</span></h2>
+      <p class="muted">One consolidated series — <strong>no hand-held Doppler, no DP/PT split</strong>. Take <strong>3 systolic readings</strong>; the average is used.</p>
+
+      <div class="guide-box two-col">
+        <div>
+          <h3>Right ankle cuff placement</h3>
+          <ul class="guide-list">
+            <li>Stay <strong>supine</strong> — same position as arms.</li>
+            <li>Cuff snug on the lower leg <strong>just above the malleoli</strong> (ankle bones).</li>
+            <li>No Doppler probe needed — one consolidated reading site.</li>
+            <li>The <strong>average</strong> of the 3 readings is used.</li>
+          </ul>
+        </div>
+        <div class="guide-media">
+          <img src="ankle.gif" alt="Animation of a full leg with the cuff placed just above the ankle bones" />
+          <p class="muted small">Cuff just above the malleoli.</p>
+        </div>
+      </div>
 
       <div class="site-block">
-        <div class="site-head"><h3>Right Ankle <span class="unit">mmHg · systolic</span></h3><span class="max-badge" id="maxAnkR">max —</span></div>
+        <div class="site-head"><h3>Right Ankle <span class="unit">mmHg · systolic</span></h3><span class="avg-badge" id="avgAnkR">avg —</span></div>
         <div class="triple-grid">
           <div class="field-block"><label for="ankR1">Reading 1</label><div class="input-row"><input id="ankR1" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 130" /><button class="btn secondary small" data-scan="ankR1">📷</button></div></div>
           <div class="field-block"><label for="ankR2">Reading 2</label><div class="input-row"><input id="ankR2" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 132" /><button class="btn secondary small" data-scan="ankR2">📷</button></div></div>
@@ -173,46 +235,39 @@
         </div>
       </div>
 
-      <div class="guide-box">
-        <div class="guide-svg" aria-hidden="true">
-          <svg viewBox="0 0 200 160" width="100%" height="140" role="img" aria-label="Right ankle cuff placement just above malleoli">
-            <rect x="78" y="8" width="44" height="90" rx="16" fill="#eff4ff" stroke="#1D4ED8" stroke-width="2"/>
-            <rect x="72" y="66" width="56" height="30" rx="8" fill="#2563EB" opacity="0.9"/>
-            <text x="100" y="86" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">CUFF</text>
-            <circle cx="84" cy="118" r="6" fill="#F43F5E"/>
-            <circle cx="116" cy="118" r="6" fill="#F43F5E"/>
-            <text x="100" y="140" text-anchor="middle" font-size="10" font-weight="bold" fill="#0b1c30">cuff just above malleoli</text>
-            <ellipse cx="100" cy="122" rx="30" ry="10" fill="none" stroke="#64748B" stroke-width="1.5" stroke-dasharray="4 3"/>
-          </svg>
-        </div>
-        <div>
-          <h3>Right ankle cuff placement</h3>
-          <ul class="guide-list">
-            <li>Stay <strong>supine</strong> — same position as arms.</li>
-            <li>Cuff snug on the lower leg <strong>just above the malleoli</strong>.</li>
-            <li>No Doppler probe needed — one consolidated reading site.</li>
-            <li>Highest of the 3 readings is used.</li>
-          </ul>
-        </div>
-      </div>
-
-      <p class="error" id="err2" hidden></p>
+      <p class="error" id="err3" hidden></p>
       <div class="nav-row">
-        <button class="btn ghost" data-goto-btn="1">← Back: Arms</button>
-        <button class="btn primary" id="toScreen3">Next: Left Ankle →</button>
+        <button class="btn ghost" data-goto-btn="2">← Back: Left Arm</button>
+        <button class="btn primary" id="toScreen4">Next: Left Ankle →</button>
       </div>
     </div>
   </section>
 
-  <!-- ============ SCREEN 3: LEFT ANKLE ×3 ============ -->
-  <section id="screen-3" class="screen" aria-labelledby="s3-title">
+  <!-- ============ SCREEN 4: LEFT ANKLE ×3 ============ -->
+  <section id="screen-4" class="screen" aria-labelledby="s4-title">
     <div class="card">
       <p class="kicker">Left ankle</p>
-      <h2 id="s3-title">Left Ankle Pressure <span class="sub">(consolidated · cuff just above malleoli)</span></h2>
-      <p class="muted">Same consolidated protocol — cuff <strong>just above the malleoli</strong>, <strong>3 systolic readings</strong>, highest kept. No Doppler.</p>
+      <h2 id="s4-title">Left Ankle Pressure <span class="sub">(consolidated · cuff just above malleoli)</span></h2>
+      <p class="muted">Same consolidated protocol — cuff <strong>just above the malleoli</strong>, <strong>3 systolic readings</strong>, average kept. No Doppler.</p>
+
+      <div class="guide-box two-col">
+        <div>
+          <h3>Left ankle cuff placement</h3>
+          <ul class="guide-list">
+            <li>Same supine position as the right leg.</li>
+            <li>Cuff <strong>just above the malleoli</strong>, same cuff size.</li>
+            <li>Wait ~1 minute between the 3 readings.</li>
+            <li>The <strong>average</strong> of the 3 readings is used.</li>
+          </ul>
+        </div>
+        <div class="guide-media">
+          <img src="ankle.gif" alt="Animation of a full leg with the cuff placed just above the ankle bones" />
+          <p class="muted small">Cuff just above the malleoli.</p>
+        </div>
+      </div>
 
       <div class="site-block">
-        <div class="site-head"><h3>Left Ankle <span class="unit">mmHg · systolic</span></h3><span class="max-badge" id="maxAnkL">max —</span></div>
+        <div class="site-head"><h3>Left Ankle <span class="unit">mmHg · systolic</span></h3><span class="avg-badge" id="avgAnkL">avg —</span></div>
         <div class="triple-grid">
           <div class="field-block"><label for="ankL1">Reading 1</label><div class="input-row"><input id="ankL1" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 126" /><button class="btn secondary small" data-scan="ankL1">📷</button></div></div>
           <div class="field-block"><label for="ankL2">Reading 2</label><div class="input-row"><input id="ankL2" type="number" inputmode="decimal" min="40" max="300" placeholder="e.g. 129" /><button class="btn secondary small" data-scan="ankL2">📷</button></div></div>
@@ -220,39 +275,16 @@
         </div>
       </div>
 
-      <div class="guide-box">
-        <div class="guide-svg" aria-hidden="true">
-          <svg viewBox="0 0 200 160" width="100%" height="140" role="img" aria-label="Left ankle cuff placement just above malleoli">
-            <rect x="78" y="8" width="44" height="90" rx="16" fill="#eff4ff" stroke="#1D4ED8" stroke-width="2"/>
-            <rect x="72" y="66" width="56" height="30" rx="8" fill="#2563EB" opacity="0.9"/>
-            <text x="100" y="86" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">CUFF</text>
-            <circle cx="84" cy="118" r="6" fill="#F43F5E"/>
-            <circle cx="116" cy="118" r="6" fill="#F43F5E"/>
-            <text x="100" y="140" text-anchor="middle" font-size="10" font-weight="bold" fill="#0b1c30">cuff just above malleoli</text>
-            <ellipse cx="100" cy="122" rx="30" ry="10" fill="none" stroke="#64748B" stroke-width="1.5" stroke-dasharray="4 3"/>
-          </svg>
-        </div>
-        <div>
-          <h3>Left ankle cuff placement</h3>
-          <ul class="guide-list">
-            <li>Same supine position as the right leg.</li>
-            <li>Cuff <strong>just above the malleoli</strong>, same cuff size.</li>
-            <li>Wait ~1 minute between the 3 readings.</li>
-            <li>Highest of the 3 readings is used.</li>
-          </ul>
-        </div>
-      </div>
-
-      <p class="error" id="err3" hidden></p>
+      <p class="error" id="err4" hidden></p>
       <div class="nav-row">
-        <button class="btn ghost" data-goto-btn="2">← Back: Right Ankle</button>
+        <button class="btn ghost" data-goto-btn="3">← Back: Right Ankle</button>
         <button class="btn primary" id="toResults">Calculate &amp; View Results →</button>
       </div>
     </div>
   </section>
 
-  <!-- ============ SCREEN 4: RESULTS ============ -->
-  <section id="screen-4" class="screen" aria-labelledby="s4-title">
+  <!-- ============ SCREEN 5: RESULTS ============ -->
+  <section id="screen-5" class="screen" aria-labelledby="s4-title">
     <div class="card result-hero">
       <p class="kicker">Results · analysis</p>
       <h2 id="s4-title">Results &amp; Analysis</h2>
@@ -266,7 +298,7 @@
           <p class="muted small" id="detailR"></p>
           <div class="gauge" aria-hidden="true">
             <div class="gauge-bar"><div class="pointer" id="ptrR"></div></div>
-            <div class="gauge-scale"><span style="left:0%">0</span><span style="left:56.25%">0.90</span><span style="left:62.5%">1.00</span><span style="left:87.5%">1.40</span><span style="left:100%">1.6+</span></div>
+            <div class="gauge-scale"><span style="left:0%">0</span><span style="left:56.25%" class="tick-up">0.90</span><span style="left:62.5%">1.00</span><span style="left:87.5%">1.40</span><span style="left:100%">1.6+</span></div>
           </div>
         </div>
         <div class="abi-card" id="cardL">
@@ -275,7 +307,7 @@
           <p class="muted small" id="detailL"></p>
           <div class="gauge" aria-hidden="true">
             <div class="gauge-bar"><div class="pointer" id="ptrL"></div></div>
-            <div class="gauge-scale"><span style="left:0%">0</span><span style="left:56.25%">0.90</span><span style="left:62.5%">1.00</span><span style="left:87.5%">1.40</span><span style="left:100%">1.6+</span></div>
+            <div class="gauge-scale"><span style="left:0%">0</span><span style="left:56.25%" class="tick-up">0.90</span><span style="left:62.5%">1.00</span><span style="left:87.5%">1.40</span><span style="left:100%">1.6+</span></div>
           </div>
         </div>
       </div>
@@ -300,11 +332,12 @@
         <button class="btn secondary" id="exportPdfBtn">📄 Export PDF Report</button>
       </div>
 
-      <h3>Session history <span class="muted small">(this browser only)</span></h3>
+      <h3>Session history</h3>
+      <p class="muted small history-note">📍 Sessions are stored <strong>only in this browser on this device</strong> (localStorage). Nothing is uploaded — there are no servers, no accounts, and no cloud copy. Clearing browser data will delete them.</p>
       <ul id="historyList" class="log"></ul>
 
       <div class="nav-row">
-        <button class="btn ghost" data-goto-btn="3">← Edit Input Values</button>
+        <button class="btn ghost" data-goto-btn="4">← Edit Input Values</button>
         <button class="btn ghost" id="newCalcBtn">↺ Start New Calculation</button>
       </div>
     </div>
@@ -354,6 +387,7 @@
 <div id="historyOverlay" class="overlay" hidden>
   <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="histTitle">
     <h2 id="histTitle">Saved sessions</h2>
+    <p class="muted small">📍 Stored only in this browser on this device — nothing is uploaded to any server.</p>
     <ul id="historyListFull" class="log"></ul>
     <div class="bo-actions">
       <button class="btn ghost small" id="clearHistoryBtn">Clear all</button>
@@ -362,9 +396,160 @@
   </div>
 </div>
 
+<!-- ABOUT overlay -->
+<div id="aboutOverlay" class="overlay" hidden>
+  <div class="overlay-card about-card" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+    <div class="about-brand">
+      <span class="logo" aria-hidden="true">🌊</span>
+      <div>
+        <h2 id="aboutTitle">VascFlow</h2>
+        <p class="muted">Ankle-Brachial Index · at-home wellness log</p>
+      </div>
+    </div>
+    <p><strong>Version v1.0.1</strong></p>
+    <p>Developed by <strong>Kailash Kalidoss</strong> · <a href="https://kailashkalidoss.com" target="_blank" rel="noopener">kailashkalidoss.com</a></p>
+    <p class="muted small">© 2026 Kailash Kalidoss. All rights reserved.</p>
+    <h3>Privacy</h3>
+    <p class="muted small">VascFlow stores your readings and sessions <strong>only on your device</strong> (browser localStorage). Nothing is transmitted to any server — no accounts, no analytics, no cloud copies. Clearing your browser data removes everything.</p>
+    <p><button class="btn secondary small" id="privacyOpenBtn">Read full Privacy Policy</button> <button class="btn secondary small" id="faqOpenBtn">FAQs</button></p>
+    <h3>Learn more about ABI</h3>
+    <p><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10506545/" target="_blank" rel="noopener">Ankle-brachial index — NIH / PMC review ↗</a></p>
+    <p class="muted small">Wellness tracking only — not a medical device. Do not use for diagnosis or treatment decisions.</p>
+    <div class="bo-actions">
+      <button class="btn primary small" id="aboutCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- PRIVACY POLICY overlay (content from privacy.md) -->
+<div id="privacyOverlay" class="overlay" hidden>
+  <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="privacyTitle">
+    <p class="kicker">Privacy policy &amp; health data disclaimer</p>
+    <h2 id="privacyTitle">Privacy Policy</h2>
+    <p class="muted small"><strong>Last Updated:</strong> October 1, 2026 · <strong>Effective Date:</strong> October 1, 2026</p>
+    <div class="privacy-body">
+      <p>Welcome to our Ankle-Brachial Index (ABI) tracking software ("we," "our," or "us"). We respect your privacy and are committed to protecting the personal and wellness information you process through our web application, AI camera scanning features, and wellness report generation tools.</p>
+      <h4>1. Important Medical &amp; Legal Disclaimer</h4>
+      <ul>
+        <li><strong>Not a Medical Device:</strong> This application is software designed solely for personal fitness, educational, and wellness trend tracking. It is <strong>NOT</strong> a certified medical device, software as a medical device (SaMD), or diagnostic tool.</li>
+        <li><strong>No Medical Advice:</strong> The Ankle-Brachial Index (ABI) calculations, spectrum visualizations, and exportable summaries generated by this app do not constitute medical diagnosis, clinical evaluation, or treatment advice.</li>
+        <li><strong>Consult Healthcare Professionals:</strong> Always seek the advice of a qualified vascular surgeon, physician, or healthcare provider regarding any lower-extremity symptoms, peripheral artery disease (PAD) concerns, or blood pressure measurements.</li>
+        <li><strong>Not Covered by HIPAA:</strong> Unless explicitly bound by a separate enterprise business associate agreement (BAA), this app operates as a direct-to-consumer wellness application and is not a "Covered Entity" under the Health Insurance Portability and Accountability Act (HIPAA).</li>
+      </ul>
+      <h4>2. Information We Collect</h4>
+      <p>We collect information directly from you when you interact with the application:</p>
+      <p><strong>A. Wellness &amp; Measurement Data</strong></p>
+      <ul>
+        <li><strong>Blood Pressure Inputs:</strong> Systolic and diastolic readings manually entered or captured for the right/left arms and right/left ankles (Dorsalis Pedis and Posterior Tibial pulse points).</li>
+        <li><strong>Calculated Metrics:</strong> Calculated ABI ratios, risk category spectrum placements, and historical measurement timestamps.</li>
+      </ul>
+      <p><strong>B. Camera &amp; Optical Images (Gemini Vision OCR)</strong></p>
+      <ul>
+        <li><strong>Temporary Processing:</strong> When you use our camera scanning feature to capture blood pressure display monitors or analog dials, the image is transmitted securely to our AI vision processor (e.g. Google Gemini API) for optical character recognition (OCR).</li>
+        <li><strong>No Image Retention:</strong> Camera feeds and uploaded display photos are processed transiently in memory to extract numerical values and are <strong>never permanently stored</strong> on our servers or used to train public AI models.</li>
+      </ul>
+      <p><strong>C. Technical &amp; Usage Data</strong></p>
+      <ul>
+        <li><strong>Device &amp; Browser Data:</strong> Standard log information, including browser type, operating system, and IP address for system performance and security.</li>
+        <li><strong>Local Storage Data:</strong> If you use local storage on your device, your measurement history resides on your client browser until cleared.</li>
+      </ul>
+      <h4>3. How We Use Your Information</h4>
+      <ol>
+        <li><strong>Delivering Core App Functionality:</strong> Calculating ABI scores, plotting spectrum gauges, displaying trend charts, and generating exportable PDF reports.</li>
+        <li><strong>AI Optical Extraction:</strong> Processing camera snapshots to automatically populate blood pressure input fields.</li>
+        <li><strong>Application Security &amp; Improvements:</strong> Monitoring system performance, diagnosing bugs, and preventing unauthorized system access.</li>
+      </ol>
+      <h4>4. How We Share &amp; Disclose Information</h4>
+      <p><strong>We do NOT sell, rent, or trade your personal wellness data or health metrics to third parties or advertising networks.</strong></p>
+      <ul>
+        <li><strong>Service Processors &amp; Infrastructure Providers:</strong> Bound cloud hosting (e.g. Vercel, Netlify), payment gateways (e.g. Stripe for processing subscriptions), and AI vision API providers acting on our behalf under strict data protection agreements.</li>
+        <li><strong>At Your Explicit Direction:</strong> When you download or email an exportable PDF report to share with your personal healthcare team.</li>
+        <li><strong>Legal Compliance:</strong> To satisfy valid legal processes, court orders, or statutory obligations if required by applicable law.</li>
+      </ul>
+      <h4>5. Data Security &amp; Storage Options</h4>
+      <ul>
+        <li><strong>Local-First Privacy:</strong> By default, your individual blood pressure entries and ABI history are stored locally in your browser's <code>localStorage</code>. You retain total control to clear this data at any time.</li>
+        <li><strong>Encryption Standards:</strong> All web traffic and API transmissions are encrypted using standard Transport Layer Security (TLS 1.3).</li>
+      </ul>
+      <h4>6. Your Data Rights &amp; Choices</h4>
+      <ul>
+        <li><strong>Right to Access &amp; Portability:</strong> You can view all logged readings on your dashboard or export them to a PDF report at any time.</li>
+        <li><strong>Right to Erasure (Deletion):</strong> You can delete your calculation history directly within the app settings or clear your browser site data.</li>
+        <li><strong>Opt-Out of Camera Processing:</strong> Use of the AI camera scanner is entirely optional; you can manually input all blood pressure readings without activating camera permissions.</li>
+      </ul>
+      <h4>7. Contact Us &amp; Issue Reporting</h4>
+      <p>If you have questions, feedback, data privacy requests, or need to report an issue regarding this application, please contact us at: <strong>Email:</strong> me@kailashkalidoss.com</p>
+    </div>
+    <div class="bo-actions">
+      <button class="btn primary small" id="privacyCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- FAQ overlay -->
+<div id="faqOverlay" class="overlay" hidden>
+  <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="faqTitle">
+    <p class="kicker">Frequently asked questions</p>
+    <h2 id="faqTitle">VascFlow FAQ</h2>
+    <div class="faq-body">
+      <details open>
+        <summary>What is the ankle-brachial index (ABI)?</summary>
+        <p>ABI compares blood pressure at the ankle to blood pressure in the arm: <strong>ABI = average ankle systolic ÷ higher arm average systolic</strong>. In VascFlow it is a self-tracking wellness number, not a diagnosis.</p>
+      </details>
+      <details>
+        <summary>Why must I lie completely flat for 10 minutes?</summary>
+        <p>Gravity affects pressure readings. Lying flat keeps your <strong>ankles and heart at the same level</strong>, and 10 minutes of quiet rest lets circulation settle — so arm and ankle readings are comparable. Do not sit up between readings.</p>
+      </details>
+      <details>
+        <summary>Why 3 readings at every site?</summary>
+        <p>Blood pressure fluctuates breath to breath. VascFlow takes <strong>3 systolic readings per site and averages them</strong>, which is steadier than any single reading. Wait about a minute between repeats.</p>
+      </details>
+      <details>
+        <summary>What if one of my 3 readings is way off?</summary>
+        <p>If a single reading is <strong>more than 30% off</strong> the others, VascFlow <strong>discards it and averages the remaining 2</strong> — the dropped value is shown struck through on the Results screen and PDF. If <strong>all 3 readings differ by more than 30%</strong>, the set can't be trusted: the app asks you to <strong>discard them and collect all 3 readings again</strong>.</p>
+      </details>
+      <details>
+        <summary>Why is the higher arm used for the calculation?</summary>
+        <p>Arm pressures can differ side to side. Using the <strong>higher arm average</strong> as the reference is the conservative standard approach — the app identifies which arm was the reference on the Results screen and PDF.</p>
+      </details>
+      <details>
+        <summary>Automatic or manual — which should I choose?</summary>
+        <p><strong>Automatic</strong> (Omron or similar): the cuff inflates itself and camera scanning is enabled — OCR reads the higher (systolic) number. <strong>Manual</strong> (sphygmomanometer + stethoscope): scanning is disabled and you type each systolic value by hand.</p>
+      </details>
+      <details>
+        <summary>Where exactly do the cuffs go?</summary>
+        <p><strong>Arms:</strong> upper-arm cuff 1–2 cm above the elbow crease, arm at heart level. <strong>Ankles:</strong> one consolidated cuff on the lower leg just above the ankle bones (malleoli). No Doppler probe and no separate foot-vessel readings are needed.</p>
+      </details>
+      <details>
+        <summary>What do the result categories mean?</summary>
+        <p>Wellness labels only: <strong>Reduced flow</strong> (&lt;0.90), <strong>Borderline</strong> (0.90–0.99), <strong>Normal</strong> (1.00–1.40), <strong>High / stiff</strong> (&gt;1.40). They are not diagnostic thresholds. If you have leg pain when walking, non-healing sores, or cold/pale feet, see a clinician promptly.</p>
+      </details>
+      <details>
+        <summary>Is VascFlow a medical device? Is my data private?</summary>
+        <p>No — it is <strong>wellness tracking only, not a medical device</strong>, and not a substitute for professional care. Your readings stay <strong>only in this browser on this device</strong>; nothing is uploaded to any server. See the full Privacy Policy in the About screen.</p>
+      </details>
+      <details>
+        <summary>Does it work offline?</summary>
+        <p>Yes, after the first load — the app, guides, and saved sessions all work offline. Camera OCR needs internet once to download its reading model, and the display font loads from Google Fonts when online (with a system fallback offline).</p>
+      </details>
+      <details>
+        <summary>How do I view or reprint an older session's report?</summary>
+        <p>Every entry in <strong>Session history</strong> (Results screen) and the <strong>History</strong> popup has its own <strong>📄 PDF</strong> button — it regenerates that session's full report (readings, averages, ABI scores, notes) with its original date and session ID, ready to print or save as PDF.</p>
+      </details>
+      <details>
+        <summary>How do I share results with my health care provider?</summary>
+        <p>Use <strong>Export PDF Report</strong> on the Results screen. It includes the disclaimer, date/session ID, all readings with site averages, both ABI scores, your notes, and a signature field — print it or save as PDF to bring to appointments.</p>
+      </details>
+    </div>
+    <div class="bo-actions">
+      <button class="btn primary small" id="faqCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-<footer><p>VascFlow PWA · works offline · data stays in this browser (localStorage) · wellness only, not a medical device</p></footer>
+<footer><p>© 2026 Kailash Kalidoss · VascFlow v1.0.1 · <a href="#" id="aboutLink">About</a> · <a href="#" id="faqLink">FAQ</a> · works offline · data stays in this browser (localStorage) · wellness only, not a medical device</p></footer>
 
 <script src="app.js"></script>
 <script>

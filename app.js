@@ -2,7 +2,8 @@
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const LS_SESSIONS = 'vascflow.sessions.v1';
-const LS_DRAFT = 'vascflow.draft.v1';
+const LS_DRAFT = 'vascflow.draft.v2'; // v2: no default method — stale v1 auto-default drafts are ignored
+const APP_VERSION = '1.0.1';
 
 /* Migrate legacy ABI Tracker keys once */
 try {
@@ -20,9 +21,9 @@ const FIELDS = Object.values(SITES).flat();
 const SITE_LABELS = { armR: 'Right Arm', armL: 'Left Arm', ankR: 'Right Ankle', ankL: 'Left Ankle' };
 const FIELD_SITE = {};
 Object.entries(SITES).forEach(([site, ids]) => ids.forEach(id => FIELD_SITE[id] = site));
-const FIELD_SCREEN = { armR1: 1, armR2: 1, armR3: 1, armL1: 1, armL2: 1, armL3: 1, ankR1: 2, ankR2: 2, ankR3: 2, ankL1: 3, ankL2: 3, ankL3: 3 };
+const FIELD_SCREEN = { armR1: 1, armR2: 1, armR3: 1, armL1: 2, armL2: 2, armL3: 2, ankR1: 3, ankR2: 3, ankR3: 3, ankL1: 4, ankL2: 4, ankL3: 4 };
 
-let method = 'auto'; // 'auto' (Omron/similar, OCR on) | 'manual' (sphygmomanometer, OCR off)
+let method = null; // 'auto' (OCR on) | 'manual' (OCR off) | null (not yet selected)
 
 /* ---------- helpers ---------- */
 function load(k, fb) { try { const v = JSON.parse(localStorage.getItem(k)); return (v === null || v === undefined) ? fb : v; } catch (e) { return fb; } }
@@ -31,12 +32,90 @@ function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.ad
 function num(id) { const el = $('#' + id); if (!el) return null; const v = parseFloat(el.value); return Number.isFinite(v) ? v : null; }
 function validPressure(v) { return v !== null && v >= 40 && v <= 300; }
 function siteReadings(site) { return SITES[site].map(num); }
-function siteComplete(site) { return siteReadings(site).every(validPressure); }
-function siteMax(site) { const rs = siteReadings(site).filter(v => v !== null); return rs.length ? Math.max(...rs) : null; }
+/* (siteStats is the single source of truth for completeness + consistency) */
+/* Site value = average of the 3 readings (rounded to 2dp).
+   Outlier rule: a reading >30% off the median is discarded and the other 2
+   are averaged. If 2+ readings are >30% off, the set is inconsistent. */
+const OUTLIER_PCT = 0.30;
+function siteStats(site) {
+  const rs = siteReadings(site);
+  if (!rs.every(validPressure)) return { ok: false, reason: 'incomplete', values: rs };
+  const med = [...rs].sort((a, b) => a - b)[1];
+  const bad = rs.map((v, i) => (Math.abs(v - med) / med > OUTLIER_PCT ? i : -1)).filter(i => i >= 0);
+  if (bad.length >= 2) return { ok: false, reason: 'inconsistent', values: rs, bad };
+  if (bad.length === 1) {
+    const kept = rs.filter((_, i) => i !== bad[0]);
+    return { ok: true, avg: Math.round((kept[0] + kept[1]) / 2 * 100) / 100, values: rs, dropped: { index: bad[0], value: rs[bad[0]] } };
+  }
+  return { ok: true, avg: Math.round(rs.reduce((a, b) => a + b, 0) / rs.length * 100) / 100, values: rs, dropped: null };
+}
+function siteAvg(site) { const s = siteStats(site); return s.ok ? s.avg : null; }
+function fmtAvg(v) { return String(Math.round(v * 10) / 10); }
+
+/* ---------- audible beeps (rest timer) ---------- */
+function beep(freq = 880, dur = 0.25, when = 0) {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new Ctx();
+    const t = ctx.currentTime + when;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination); o.frequency.value = freq;
+    g.gain.setValueAtTime(0.001, t);
+    g.gain.exponentialRampToValueAtTime(0.4, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.start(t); o.stop(t + dur + 0.05);
+  } catch (e) {}
+}
+function beep5() { for (let i = 0; i < 5; i++) beep(880, 0.25, i * 0.45); }
+
+/* ---------- 10-minute supine rest timer (Screen 0) ---------- */
+const REST_SECONDS = 600;
+let restLeft = REST_SECONDS, restHandle = null;
+function fmtClock(s) { return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
+function startRestTimer() {
+  if (!method) { toast('Select Automatic or Manual first'); return; }
+  stopRestTimer();
+  restLeft = REST_SECONDS;
+  $('#restTimerBox').hidden = false;
+  $('#startRestBtn').disabled = true;
+  $('#restClock').textContent = fmtClock(restLeft);
+  $('#restStatus').textContent = 'Timer running — stay flat and still. You will auto-advance when it reaches zero.';
+  restHandle = setInterval(() => {
+    restLeft -= 1;
+    if (restLeft <= 0) {
+      stopRestTimer();
+      $('#restClock').textContent = '00:00';
+      $('#restStatus').textContent = 'Rest complete — 10 minutes supine. Moving to Arm Pressures.';
+      $('#startRestBtn').disabled = false;
+      beep5(); toast('10 minutes up ✓ — starting Arm Pressures');
+      if (currentScreen === 0) setTimeout(() => gotoScreen(1), 1500);
+      return;
+    }
+    $('#restClock').textContent = fmtClock(restLeft);
+  }, 1000);
+}
+function stopRestTimer() { if (restHandle) { clearInterval(restHandle); restHandle = null; } }
 
 /* ---------- method mode ---------- */
 function setMethod(m, silent) {
-  method = (m === 'manual') ? 'manual' : 'auto';
+  if (m !== 'manual' && m !== 'auto') {
+    // Nothing selected yet — neutral state, scanning unavailable
+    method = null;
+    $$('input[name="method"]').forEach(r => r.checked = false);
+    const pill0 = $('#methodPill');
+    pill0.textContent = 'Select method';
+    pill0.classList.remove('manual');
+    $('#manualBanner').hidden = true;
+    $('#manualWarnBox').hidden = true;
+    $$('[data-scan]').forEach(b => {
+      b.disabled = true;
+      b.title = 'Select Automatic or Manual first';
+      b.style.opacity = '.45';
+    });
+    $('#startRestBtn').disabled = true;
+    return;
+  }
+  method = m;
   $$('input[name="method"]').forEach(r => r.checked = (r.value === method));
   const pill = $('#methodPill');
   pill.textContent = method === 'manual' ? 'Manual' : 'Automatic';
@@ -49,7 +128,14 @@ function setMethod(m, silent) {
     b.title = method === 'manual' ? 'Disabled in Manual mode — enter values by hand' : 'Scan monitor (systolic only)';
     b.style.opacity = method === 'manual' ? '.45' : '';
   });
-  if (!silent) { persistDraft(); toast(method === 'manual' ? 'Manual mode — camera scanning disabled' : 'Automatic mode — camera scanning enabled'); }
+  if (!silent) { persistDraft(); }
+  // (Re)selecting a method arms the timer — it only runs after Start Measurement is pressed
+  stopRestTimer();
+  $('#restTimerBox').hidden = false;
+  $('#restClock').textContent = fmtClock(REST_SECONDS);
+  $('#restStatus').textContent = 'Ready — lie flat, then press Start Measurement.';
+  $('#startRestBtn').disabled = false;
+  if (!silent) { toast(method === 'manual' ? 'Manual mode — camera scanning disabled. Press Start Measurement when ready.' : 'Automatic mode — camera scanning enabled. Press Start Measurement when ready.'); }
 }
 $$('input[name="method"]').forEach(r => r.addEventListener('change', () => setMethod(r.value)));
 
@@ -65,12 +151,13 @@ function gotoScreen(n) {
     st.classList.toggle('done', g < n);
   });
   window.scrollTo({ top: 0, behavior: 'smooth' });
-  if (n === 4) renderResults();
+  if (n === 5) renderResults();
   persistDraft();
 }
 $$('[data-goto-btn]').forEach(b => b.addEventListener('click', () => gotoScreen(+b.dataset.gotoBtn)));
 $$('.wizard-steps .step').forEach(st => st.addEventListener('click', () => {
   const target = +st.dataset.goto;
+  if (target > 0 && currentScreen === 0 && !method) { toast('Select Automatic or Manual first'); showErr('err0', 'Please select Automatic or Manual first — this starts your 10-minute rest timer.'); return; }
   if (target <= currentScreen || validateUpTo(currentScreen)) gotoScreen(target);
 }));
 
@@ -81,44 +168,59 @@ function showErr(id, msg) {
 }
 function siteErrMsg(site) {
   const rs = siteReadings(site);
-  if (rs.some(v => v === null)) return `Please enter all 3 ${SITE_LABELS[site]} systolic readings (highest of the 3 is used).`;
+  if (rs.some(v => v === null)) return `Please enter all 3 ${SITE_LABELS[site]} systolic readings (average of valid readings is used).`;
   if (!rs.every(validPressure)) return `${SITE_LABELS[site]} values look off — expected 40–300 mmHg systolic.`;
+  const st = siteStats(site);
+  if (!st.ok && st.reason === 'inconsistent')
+    return `${SITE_LABELS[site]} readings differ too much (more than 30% apart: ${rs.join(', ')}) — please discard them and collect all 3 readings again.`;
   return null;
 }
 function validateUpTo(screen) {
-  if (screen >= 1 && (siteErrMsg('armR') || siteErrMsg('armL'))) return false;
-  if (screen >= 2 && siteErrMsg('ankR')) return false;
+  if (screen >= 1 && siteErrMsg('armR')) return false;
+  if (screen >= 2 && siteErrMsg('armL')) return false;
+  if (screen >= 3 && siteErrMsg('ankR')) return false;
   return true;
 }
 
-$('#toScreen1').addEventListener('click', () => { persistDraft(); gotoScreen(1); });
+$('#toScreen1').addEventListener('click', () => {
+  if (!method) return showErr('err0', 'Please select Automatic or Manual first — this starts your 10-minute rest timer.');
+  showErr('err0', null); persistDraft(); gotoScreen(1);
+});
 $('#toScreen2').addEventListener('click', () => {
-  const e = siteErrMsg('armR') || siteErrMsg('armL');
+  const e = siteErrMsg('armR');
   if (e) return showErr('err1', e);
   showErr('err1', null); gotoScreen(2);
 });
 $('#toScreen3').addEventListener('click', () => {
-  const e = siteErrMsg('ankR');
+  const e = siteErrMsg('armL');
   if (e) return showErr('err2', e);
   showErr('err2', null); gotoScreen(3);
 });
-$('#toResults').addEventListener('click', () => {
-  const e = siteErrMsg('ankL');
+$('#toScreen4').addEventListener('click', () => {
+  const e = siteErrMsg('ankR');
   if (e) return showErr('err3', e);
   showErr('err3', null); gotoScreen(4);
 });
+$('#toResults').addEventListener('click', () => {
+  const e = siteErrMsg('ankL');
+  if (e) return showErr('err4', e);
+  showErr('err4', null); gotoScreen(5);
+});
 
 /* live max badges */
-const MAX_BADGE = { armR: 'maxArmR', armL: 'maxArmL', ankR: 'maxAnkR', ankL: 'maxAnkL' };
-function refreshMaxBadges() {
+const AVG_BADGE = { armR: 'avgArmR', armL: 'avgArmL', ankR: 'avgAnkR', ankL: 'avgAnkL' };
+function refreshAvgBadges() {
   Object.keys(SITES).forEach(site => {
-    const m = siteMax(site);
-    const el = document.getElementById(MAX_BADGE[site]);
-    if (el) el.textContent = m === null ? 'max —' : `max ${m} mmHg`;
+    const st = siteStats(site);
+    const el = document.getElementById(AVG_BADGE[site]);
+    if (!el) return;
+    if (!st.ok && st.reason === 'incomplete') { el.textContent = 'avg —'; return; }
+    if (!st.ok) { el.textContent = '⚠ >30% apart — retake'; return; }
+    el.textContent = st.dropped ? `avg ${fmtAvg(st.avg)} · dropped ${st.dropped.value}` : `avg ${fmtAvg(st.avg)} mmHg`;
   });
 }
 FIELDS.forEach(id => {
-  $('#' + id).addEventListener('input', () => { refreshMaxBadges(); persistDraft(); });
+  $('#' + id).addEventListener('input', () => { refreshAvgBadges(); persistDraft(); });
 });
 
 function persistDraft() {
@@ -132,11 +234,11 @@ function restoreDraft() {
     FIELDS.forEach(f => { if (d[f] !== undefined) $('#' + f).value = d[f]; });
     if (d.notes) $('#notes').value = d.notes;
   }
-  setMethod(method, true); refreshMaxBadges();
+  setMethod(method, true); refreshAvgBadges();
 }
 $('#notes').addEventListener('input', persistDraft);
 
-/* ---------- ABI calculation (highest of 3 per site) ---------- */
+/* ---------- ABI calculation (average of 3 per site) ---------- */
 /* Scale color codes (Clinical Clarity) — single source of truth for gauge, badges, scores, pointers */
 const ABI_COLORS = { reduced: '#F43F5E', borderline: '#F59E0B', normal: '#10B981', high: '#2563EB' };
 function categorize(abi) {
@@ -147,15 +249,17 @@ function categorize(abi) {
   return { label: 'High / Stiff', cls: 'high', color: ABI_COLORS.high };
 }
 function computeABI() {
-  if (!siteComplete('armR') || !siteComplete('armL') || !siteComplete('ankR') || !siteComplete('ankL')) return null;
-  const armR = siteMax('armR'), armL = siteMax('armL');
-  const ankR = siteMax('ankR'), ankL = siteMax('ankL');
+  const st = { armR: siteStats('armR'), armL: siteStats('armL'), ankR: siteStats('ankR'), ankL: siteStats('ankL') };
+  if (!st.armR.ok || !st.armL.ok || !st.ankR.ok || !st.ankL.ok) return null;
+  const armR = st.armR.avg, armL = st.armL.avg;
+  const ankR = st.ankR.avg, ankL = st.ankL.avg;
   const refArm = Math.max(armR, armL);
   const refArmSide = armR >= armL ? 'Right Arm' : 'Left Arm';
   return {
     armR, armL, ankR, ankL, refArm, refArmSide,
     rABI: ankR / refArm, lABI: ankL / refArm,
     raw: { armR: siteReadings('armR'), armL: siteReadings('armL'), ankR: siteReadings('ankR'), ankL: siteReadings('ankL') },
+    dropped: { armR: st.armR.dropped, armL: st.armL.dropped, ankR: st.ankR.dropped, ankL: st.ankL.dropped },
   };
 }
 function gaugePos(abi) { return Math.max(0, Math.min(abi, 1.6)) / 1.6 * 100; }
@@ -165,26 +269,30 @@ function renderResults() {
   const c = computeABI();
   $('#methodRecap').textContent = 'Method: ' + methodName() + ' · supine, rested & calm';
   if (!c) {
-    $('#refArmBox').textContent = 'Enter 3 readings per site to calculate ABI (highest of each trio is used).';
+    $('#refArmBox').textContent = 'Enter 3 readings per site to calculate ABI (average of each trio is used).';
     $('#breakdownBox').innerHTML = '';
     return c;
   }
-  $('#refArmBox').innerHTML = `<strong>Reference arm: ${c.refArmSide} — ${c.refArm} mmHg</strong> (max of R ${c.armR} / L ${c.armL}). Formula: ABI = highest ankle (max of 3) ÷ ${c.refArm}.`;
+  $('#refArmBox').innerHTML = `<strong>Reference arm: ${c.refArmSide} — ${fmtAvg(c.refArm)} mmHg</strong> (higher of the two arm averages: R ${fmtAvg(c.armR)} / L ${fmtAvg(c.armL)}). Formula: ABI = average ankle ÷ higher arm average.`;
   const rC = categorize(c.rABI), lC = categorize(c.lABI);
   const sR = $('#scoreR'); sR.textContent = c.rABI.toFixed(2); sR.style.color = rC.color;
   const sL = $('#scoreL'); sL.textContent = c.lABI.toFixed(2); sL.style.color = lC.color;
   const bR = $('#badgeR'); bR.textContent = rC.label; bR.className = 'badge ' + rC.cls;
   const bL = $('#badgeL'); bL.textContent = lC.label; bL.className = 'badge ' + lC.cls;
-  $('#detailR').textContent = `Right ankle max ${c.ankR} ÷ ${c.refArm} (ref arm)`;
-  $('#detailL').textContent = `Left ankle max ${c.ankL} ÷ ${c.refArm} (ref arm)`;
+  $('#detailR').textContent = `Right ankle avg ${fmtAvg(c.ankR)} ÷ ${fmtAvg(c.refArm)} (ref arm)`;
+  $('#detailL').textContent = `Left ankle avg ${fmtAvg(c.ankL)} ÷ ${fmtAvg(c.refArm)} (ref arm)`;
   const pR = $('#ptrR'); pR.style.left = gaugePos(c.rABI) + '%'; pR.style.background = rC.color;
   const pL = $('#ptrL'); pL.style.left = gaugePos(c.lABI) + '%'; pL.style.background = lC.color;
   $('#breakdownBox').innerHTML =
-    `<strong>Site breakdown (highest of 3 in bold):</strong><br>` +
-    `Right Arm: ${c.raw.armR.join(' · ')} → <strong>${c.armR}</strong> &nbsp;|&nbsp; ` +
-    `Left Arm: ${c.raw.armL.join(' · ')} → <strong>${c.armL}</strong><br>` +
-    `Right Ankle (above malleoli): ${c.raw.ankR.join(' · ')} → <strong>${c.ankR}</strong> &nbsp;|&nbsp; ` +
-    `Left Ankle (above malleoli): ${c.raw.ankL.join(' · ')} → <strong>${c.ankL}</strong>`;
+    `<strong>Site breakdown (average of valid readings — a reading &gt;30% off is dropped):</strong><br>` +
+    `Right Arm: ${showVals('armR')} → <strong>${fmtAvg(c.armR)}</strong> &nbsp;|&nbsp; ` +
+    `Left Arm: ${showVals('armL')} → <strong>${fmtAvg(c.armL)}</strong><br>` +
+    `Right Ankle (above malleoli): ${showVals('ankR')} → <strong>${fmtAvg(c.ankR)}</strong> &nbsp;|&nbsp; ` +
+    `Left Ankle (above malleoli): ${showVals('ankL')} → <strong>${fmtAvg(c.ankL)}</strong>`;
+  function showVals(key) {
+    return c.raw[key].map((v, i) =>
+      (c.dropped[key] && c.dropped[key].index === i) ? `<s>${v} dropped</s>` : v).join(' · ');
+  }
   renderHistory();
   return c;
 }
@@ -197,13 +305,32 @@ function sessionIdFor(list) {
 }
 function renderHistory() {
   const list = getSessions();
-  $('#historyList').innerHTML = list.length ? [...list].reverse().slice(0, 5).map(s =>
-    `<li><span>📅 ${s.date} · R <strong>${s.rABI}</strong> (${s.rCat}) · L <strong>${s.lABI}</strong> (${s.lCat})</span><span class="muted">${s.id}</span></li>`
-  ).join('') : '<li class="muted">No saved sessions yet — calculate, then Save Session.</li>';
-  $('#historyListFull').innerHTML = list.length ? [...list].reverse().map(s =>
-    `<li><span>📅 ${s.date} · ${s.method || ''}<br>R ${s.rABI} (${s.rCat}) · L ${s.lABI} (${s.lCat})<br><span class="muted">Arms R${s.armR}/L${s.armL} · Ankles R${s.ankR}/L${s.ankL} · ref ${s.refArm}</span></span><span class="muted">${s.id}</span></li>`
-  ).join('') : '<li class="muted">Nothing saved yet.</li>';
+  const itemHtml = (s, full) =>
+    `<li><span>📅 ${s.date}${full ? ` · ${s.method || ''}` : ''}<br>R <strong>${s.rABI}</strong> (${s.rCat}) · L <strong>${s.lABI}</strong> (${s.lCat})` +
+    (full ? `<br><span class="muted">Arms R${s.armR}/L${s.armL} · Ankles R${s.ankR}/L${s.ankL} · ref ${s.refArm}</span>` : '') +
+    `</span><span class="hist-side"><span class="muted">${s.id}</span><button class="btn secondary small" data-pdf="${s.id}">📄 PDF</button></span></li>`;
+  $('#historyList').innerHTML = list.length ? [...list].reverse().slice(0, 5).map(s => itemHtml(s, false)).join('') : '<li class="muted">No saved sessions yet — calculate, then Save Session.</li>';
+  $('#historyListFull').innerHTML = list.length ? [...list].reverse().map(s => itemHtml(s, true)).join('') : '<li class="muted">Nothing saved yet.</li>';
 }
+function openSessionPdf(id) {
+  const s = getSessions().find(x => x.id === id);
+  if (!s) return toast('Session not found');
+  const d = s.ts ? new Date(s.ts) : null;
+  const raw = s.raw || { armR: [s.armR], armL: [s.armL], ankR: [s.ankR], ankL: [s.ankL] };
+  openPdfReport({
+    armR: s.armR, armL: s.armL, ankR: s.ankR, ankL: s.ankL,
+    raw, dropped: s.dropped || null, refArm: s.refArm, refArmSide: s.refArmSide,
+    rABI: parseFloat(s.rABI), lABI: parseFloat(s.lABI),
+    method: s.method || '—',
+    dateStr: d ? d.toLocaleDateString() : s.date, timeStr: d ? d.toLocaleTimeString() : '',
+    generatedStr: new Date().toLocaleString(),
+    sessionId: s.id, notes: escNotes(s.notes),
+  });
+}
+[$('#historyList'), $('#historyListFull')].forEach(ul => ul.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-pdf]');
+  if (b) openSessionPdf(b.dataset.pdf);
+}));
 $('#saveSessionBtn').addEventListener('click', () => {
   const c = computeABI();
   if (!c) return toast('Enter all 3 readings per site before saving');
@@ -213,6 +340,7 @@ $('#saveSessionBtn').addEventListener('click', () => {
     id, date: new Date().toLocaleString(), method: methodName(),
     armR: c.armR, armL: c.armL, ankR: c.ankR, ankL: c.ankL,
     raw: c.raw, refArm: c.refArm, refArmSide: c.refArmSide,
+    dropped: c.dropped || null, ts: Date.now(),
     rABI: c.rABI.toFixed(2), lABI: c.lABI.toFixed(2),
     rCat: categorize(c.rABI).label, lCat: categorize(c.lABI).label,
     notes: $('#notes').value || '',
@@ -224,7 +352,7 @@ $('#historyCloseBtn').addEventListener('click', () => $('#historyOverlay').hidde
 $('#clearHistoryBtn').addEventListener('click', () => { if (confirm('Delete all saved VascFlow sessions?')) { save(LS_SESSIONS, []); renderHistory(); } });
 function clearInputs() {
   FIELDS.forEach(f => { $('#' + f).value = ''; });
-  $('#notes').value = ''; refreshMaxBadges(); persistDraft();
+  $('#notes').value = ''; refreshAvgBadges(); persistDraft();
 }
 $('#resetAllBtn').addEventListener('click', () => {
   if (!confirm('Clear all readings and notes? (Method selection is kept.)')) return;
@@ -232,40 +360,66 @@ $('#resetAllBtn').addEventListener('click', () => {
 });
 $('#newCalcBtn').addEventListener('click', () => { clearInputs(); gotoScreen(0); });
 
+/* ---------- rest timer restart + about screen ---------- */
+$('#restRestartBtn').addEventListener('click', () => { startRestTimer(); toast('Rest timer restarted — 10:00'); });
+$('#startRestBtn').addEventListener('click', () => { startRestTimer(); toast('Rest timer started — stay flat and still'); });
+function openAbout() { $('#aboutOverlay').hidden = false; }
+$('#aboutBtnTop').addEventListener('click', openAbout);
+$('#aboutLink').addEventListener('click', (e) => { e.preventDefault(); openAbout(); });
+$('#aboutCloseBtn').addEventListener('click', () => $('#aboutOverlay').hidden = true);
+
+/* ---------- privacy policy + FAQ screens ---------- */
+$('#privacyOpenBtn').addEventListener('click', () => $('#privacyOverlay').hidden = false);
+$('#privacyCloseBtn').addEventListener('click', () => $('#privacyOverlay').hidden = true);
+function openFaq() { $('#faqOverlay').hidden = false; }
+$('#faqOpenBtn').addEventListener('click', openFaq);
+$('#faqLink').addEventListener('click', (e) => { e.preventDefault(); openFaq(); });
+$('#faqCloseBtn').addEventListener('click', () => $('#faqOverlay').hidden = true);
+
 /* ---------- PDF export (print window, works offline) ---------- */
-const DISCLAIMER_LONG = 'MANDATORY NOTICE: This summary is generated for personal wellness tracking and self-reported health logging ONLY. This document is NOT a medical diagnosis or official vascular evaluation. Values are computed from user-entered or camera-scanned systolic data. The person measured should have been supine, rested and calm. Consult a qualified clinician for any health decisions.';
+const DISCLAIMER_LONG = 'MANDATORY NOTICE: This summary is generated for personal wellness tracking and self-reported health logging ONLY. This document is NOT a medical diagnosis or official vascular evaluation. Values are computed from user-entered or camera-scanned systolic data. The person measured should have been supine and rested a full 10 minutes. Consult a qualified clinician for any health decisions.';
+function escNotes(t) { return (t || '').replace(/</g, '&lt;'); }
+function openPdfReport(rep) {
+  const rC = categorize(rep.rABI), lC = categorize(rep.lABI);
+  const showPdfVals = (key) => rep.raw[key].map((v, i) =>
+    (rep.dropped && rep.dropped[key] && rep.dropped[key].index === i) ? `<s>${v} (dropped &gt;30% off)</s>` : v).join(' · ');
+  const w = window.open('', '_blank', 'width=800,height=900');
+  if (!w) { toast('Popup blocked — allow popups to export PDF'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>VascFlow Report ${rep.sessionId}</title>
+  <style>body{font-family:Arial,sans-serif;color:#111;margin:0;padding:24px}header.banner{background:#0b1c30;color:#eaf1ff;padding:12px 14px;border-radius:8px;font-size:13px}table{width:100%;border-collapse:collapse;margin:14px 0}td,th{border:1px solid #999;padding:8px;font-size:14px;text-align:left}.res{background:#ECFDF5;border:2px solid #10B981;border-radius:8px;padding:12px;margin:14px 0}footer{margin-top:18px;font-size:11px;color:#555;border-top:1px solid #999;padding-top:8px}.sig{margin-top:28px;display:flex;gap:32px}.sig div{flex:1;border-top:1px solid #111;padding-top:4px;font-size:12px}</style></head><body>
+  <header class="banner"><strong>${DISCLAIMER_LONG}</strong></header>
+  <h1>VascFlow — ABI Wellness Tracking Report</h1>
+  <p><strong>Date:</strong> ${rep.dateStr} &nbsp; <strong>Time:</strong> ${rep.timeStr} &nbsp; <strong>Session ID:</strong> ${rep.sessionId}<br><strong>Method:</strong> ${rep.method} &nbsp;·&nbsp; <strong>Position:</strong> supine, rested a full 10 minutes (at-home setup)</p>
+  <h2>Data Summary (systolic mmHg — average of valid readings; a reading &gt;30% off is dropped)</h2>
+  <table><tr><th>Site</th><th>Readings 1 · 2 · 3</th><th>Site avg</th></tr>
+  <tr><td>Right Arm</td><td>${showPdfVals('armR')}</td><td><strong>${rep.armR}</strong>${rep.refArmSide === 'Right Arm' ? ' ★ REFERENCE' : ''}</td></tr>
+  <tr><td>Left Arm</td><td>${showPdfVals('armL')}</td><td><strong>${rep.armL}</strong>${rep.refArmSide === 'Left Arm' ? ' ★ REFERENCE' : ''}</td></tr>
+  <tr><td>Right Ankle (cuff just above malleoli, consolidated)</td><td>${showPdfVals('ankR')}</td><td><strong>${rep.ankR}</strong></td></tr>
+  <tr><td>Left Ankle (cuff just above malleoli, consolidated)</td><td>${showPdfVals('ankL')}</td><td><strong>${rep.ankL}</strong></td></tr></table>
+  <div class="res"><h2>ABI Calculated Results</h2>
+  <p><strong>Formula:</strong> ABI = average ankle systolic ÷ average arm systolic (${rep.refArm} mmHg)</p>
+  <p><strong>Right Leg ABI: ${rep.rABI.toFixed(2)}</strong> — wellness category: <strong>${rC.label}</strong></p>
+  <p><strong>Left Leg ABI: ${rep.lABI.toFixed(2)}</strong> — wellness category: <strong>${lC.label}</strong></p>
+  <p style="font-size:12px">Labels: Reduced Flow (&lt;0.90) · Borderline (0.90–0.99) · Normal (1.00–1.40) · High/Stiff (&gt;1.40). Self-tracking labels only.</p></div>
+  <h2>Notes</h2><p>${rep.notes || '<em>No notes recorded.</em>'}</p>
+  <div class="sig"><div>Personal wellness observations / signature</div><div>Date</div></div>
+  <footer>${DISCLAIMER_LONG}<br>Generated by VascFlow v${APP_VERSION} PWA · ${rep.generatedStr}</footer>
+  <script>window.onload=function(){window.print();}<\/script></body></html>`);
+  w.document.close();
+  toast('Report opened — use Print → Save as PDF');
+}
 $('#exportPdfBtn').addEventListener('click', () => {
   const c = computeABI();
   if (!c) return toast('Enter all readings before exporting');
   const now = new Date();
-  const sessionId = sessionIdFor(getSessions());
-  const rC = categorize(c.rABI), lC = categorize(c.lABI);
-  const notes = ($('#notes').value || '').replace(/</g, '&lt;');
-  const tri = (arr, mx) => arr.map(v => v === mx ? `<strong>${v}</strong>` : v).join(' , ');
-  const w = window.open('', '_blank', 'width=800,height=900');
-  if (!w) return toast('Popup blocked — allow popups to export PDF');
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>VascFlow Report ${sessionId}</title>
-  <style>body{font-family:Arial,sans-serif;color:#111;margin:0;padding:24px}header.banner{background:#0b1c30;color:#eaf1ff;padding:12px 14px;border-radius:8px;font-size:13px}table{width:100%;border-collapse:collapse;margin:14px 0}td,th{border:1px solid #999;padding:8px;font-size:14px;text-align:left}.res{background:#ECFDF5;border:2px solid #10B981;border-radius:8px;padding:12px;margin:14px 0}footer{margin-top:18px;font-size:11px;color:#555;border-top:1px solid #999;padding-top:8px}.sig{margin-top:28px;display:flex;gap:32px}.sig div{flex:1;border-top:1px solid #111;padding-top:4px;font-size:12px}</style></head><body>
-  <header class="banner"><strong>${DISCLAIMER_LONG}</strong></header>
-  <h1>VascFlow — ABI Wellness Tracking Report</h1>
-  <p><strong>Date:</strong> ${now.toLocaleDateString()} &nbsp; <strong>Time:</strong> ${now.toLocaleTimeString()} &nbsp; <strong>Session ID:</strong> ${sessionId}<br><strong>Method:</strong> ${methodName()} &nbsp;·&nbsp; <strong>Position:</strong> supine, rested &amp; calm (at-home setup)</p>
-  <h2>Data Summary (systolic mmHg — highest of 3 in bold)</h2>
-  <table><tr><th>Site</th><th>Readings 1 · 2 · 3</th><th>Site max</th></tr>
-  <tr><td>Right Arm</td><td>${tri(c.raw.armR, c.armR)}</td><td>${c.armR}${c.refArmSide === 'Right Arm' ? ' ★ REFERENCE' : ''}</td></tr>
-  <tr><td>Left Arm</td><td>${tri(c.raw.armL, c.armL)}</td><td>${c.armL}${c.refArmSide === 'Left Arm' ? ' ★ REFERENCE' : ''}</td></tr>
-  <tr><td>Right Ankle (cuff just above malleoli, consolidated)</td><td>${tri(c.raw.ankR, c.ankR)}</td><td>${c.ankR}</td></tr>
-  <tr><td>Left Ankle (cuff just above malleoli, consolidated)</td><td>${tri(c.raw.ankL, c.ankL)}</td><td>${c.ankL}</td></tr></table>
-  <div class="res"><h2>ABI Calculated Results</h2>
-  <p><strong>Formula:</strong> ABI = highest ankle systolic (max of 3) ÷ highest arm systolic (${c.refArm} mmHg)</p>
-  <p><strong>Right Leg ABI: ${c.rABI.toFixed(2)}</strong> — wellness category: <strong>${rC.label}</strong></p>
-  <p><strong>Left Leg ABI: ${c.lABI.toFixed(2)}</strong> — wellness category: <strong>${lC.label}</strong></p>
-  <p style="font-size:12px">Labels: Reduced Flow (&lt;0.90) · Borderline (0.90–0.99) · Normal (1.00–1.40) · High/Stiff (&gt;1.40). Self-tracking labels only.</p></div>
-  <h2>Notes</h2><p>${notes || '<em>No notes recorded.</em>'}</p>
-  <div class="sig"><div>Personal wellness observations / signature</div><div>Date</div></div>
-  <footer>${DISCLAIMER_LONG}<br>Generated by VascFlow PWA · ${now.toLocaleString()}</footer>
-  <script>window.onload=function(){window.print();}<\/script></body></html>`);
-  w.document.close();
-  toast('Report opened — use Print → Save as PDF');
+  openPdfReport({
+    armR: c.armR, armL: c.armL, ankR: c.ankR, ankL: c.ankL,
+    raw: c.raw, dropped: c.dropped, refArm: c.refArm, refArmSide: c.refArmSide,
+    rABI: c.rABI, lABI: c.lABI, method: methodName(),
+    dateStr: now.toLocaleDateString(), timeStr: now.toLocaleTimeString(),
+    generatedStr: now.toLocaleString(),
+    sessionId: sessionIdFor(getSessions()), notes: escNotes($('#notes').value),
+  });
 });
 
 /* ---------- Scanner modal (Automatic mode only, systolic-only OCR) ---------- */
@@ -280,7 +434,7 @@ function openScan(fieldId) {
   }
   scanTarget = fieldId;
   const site = FIELD_SITE[fieldId];
-  $('#scanTarget').textContent = `Target: ${SITE_LABELS[site]} — ${fieldId.replace(/[^0-9]/g, '')} of 3 (systolic only; highest reading wins).`;
+  $('#scanTarget').textContent = `Target: ${SITE_LABELS[site]} — ${fieldId.replace(/[^0-9]/g, '')} of 3 (systolic only; average of the 3 is used).`;
   $('#ocrChips').innerHTML = ''; $('#ocrStatus').textContent = '';
   $('#scanManual').value = $('#' + fieldId).value || '';
   const pv = $('#scanPreview'); pv.hidden = true; pv.removeAttribute('src');
@@ -342,7 +496,7 @@ async function runOCR(imageSrc) {
 function applyScanValue(v) {
   if (!scanTarget) return;
   $('#' + scanTarget).value = v;
-  refreshMaxBadges(); persistDraft();
+  refreshAvgBadges(); persistDraft();
   toast(`${SITE_LABELS[FIELD_SITE[scanTarget]]} reading set to ${v} systolic ✓`);
   closeScan();
   gotoScreen(FIELD_SCREEN[scanTarget] || currentScreen);
