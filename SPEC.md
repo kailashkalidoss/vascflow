@@ -35,12 +35,13 @@ The selected method is stored, shown on every screen, included in saved sessions
 ## 3. Information Architecture & Screen Flow
 
 ```
-┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌──────────────┐
-│  SCREEN 0   │──>│  SCREEN 1   │──>│  SCREEN 2   │──>│  SCREEN 3   │──>│  SCREEN 4   │──>│   SCREEN 5   │
-│Setup+Timer  │   │ Right Arm   │   │ Left Arm    │   │Right Ankle  │   │ Left Ankle  │   │Results & PDF │
-└─────────────┘   └─────────────┘   └─────────────┘   └─────────────┘   └─────────────┘   └──────────────┘
+┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌──────────────┐   ┌─────────────┐
+│  SCREEN 0   │──>│  SCREEN 1   │──>│  SCREEN 2   │──>│  SCREEN 3   │──>│  SCREEN 4   │──>│   SCREEN 5   │──>│  SCREEN 6   │
+│Setup+Timer  │   │ Right Arm   │   │ Left Arm    │   │Right Ankle  │   │ Left Ankle  │   │Results & PDF │   │Trends (same-│
+│             │   │             │   │             │   │             │   │             │   │              │   │patient only)│
+└─────────────┘   └─────────────┘   └─────────────┘   └─────────────┘   └─────────────┘   └──────────────┘   └─────────────┘
 ```
-Plus an **About screen** (overlay, reachable from header/footer): app name, logo, version, developer credit + website, **© 2026 Kailash Kalidoss**, privacy language, ABI learn-more link. A **FAQ screen** (footer + About links) answers anticipated questions: what ABI is, why 10-min supine rest, why 3-reading averages, why the higher arm is the reference, automatic vs manual, cuff placement, category meanings, privacy/offline behavior, PDF sharing, and trend viewing. Screen 5 ──> **Screen 6: Trends** (same-patient confirmed). No "Screen x of y" counters are shown; wizard pills indicate progress.
+Plus an **About screen** (overlay, reachable from header/footer): app name, logo, version, developer credit + website, **© 2026 Kailash Kalidoss**, MIT license link, privacy language, ABI learn-more link. A **FAQ screen** (footer + About links) answers anticipated questions: what ABI is, what's new, why 10-min supine rest, how the rest timer works, why 3-reading averages, outlier handling, why the higher arm is the reference, automatic vs manual, cuff placement, category meanings, privacy/offline behavior, PDF sharing/reprinting, and trend viewing. No "Screen x of y" counters are shown; wizard pills indicate progress.
 
 **Reading rule (all sites):** every site is measured **3 times** and the **average** is used, with outlier handling — a reading **more than 30% off** the median is **discarded** and the remaining 2 are averaged (shown struck through). If **all 3 readings differ by more than 30%**, the set is rejected and the user must **recollect all 3 readings**.
 
@@ -52,7 +53,7 @@ Plus an **About screen** (overlay, reachable from header/footer): app name, logo
 * **Purpose:** Choose the measurement method, enforce the 10-minute supine rest, and confirm at-home positioning.
 * **Fields & Actions:**
   * **Method selector (radio cards):** Automatic (Omron/similar) vs Manual (sphygmomanometer).
-  * **Rest timer box:** 10:00 countdown, status line, Restart button.
+  * **Rest timer box:** 10:00 countdown (timestamp-based, background-tab safe), status line, **Start Measurement** button (enabled only after a method is chosen), Restart button.
   * **Manual-mode warning banner:** Visible only when Manual is selected — OCR disabled.
   * **Positioning checklist + supine GIF:** lie completely flat, rest a full 10 min, do not sit up, ankles & heart level, correct cuff sizes, 3 readings per site (average used).
 * **Navigation:** `Next: Arm Pressures →` (manual) + timer auto-advance.
@@ -69,7 +70,7 @@ Plus an **About screen** (overlay, reachable from header/footer): app name, logo
 
 ### Screen 2: Left Arm Pressure (Brachial Artery)
 * **Purpose:** Collect left-arm systolic values — **3 readings, average used**. No ABI formula is shown on this screen.
-* **Layout:** The cuff-placement guide (animated full-arm GIF `arm_left.gif`, mirrored for the left limb) appears **above** the reading inputs.
+* **Layout:** The cuff-placement guide (animated dedicated left-arm GIF `arm_left.gif`, built from the `left_arm.jpeg` illustration) appears **above** the reading inputs.
 * **Fields & Actions:**
   * **Left Arm Systolic (mmHg) × 3** (auto average badge).
   * **AI Vision Button (per reading, Automatic mode only):** webcam/upload scanner; OCR captures the **systolic (higher) number only**. Disabled with warning in Manual mode.
@@ -99,7 +100,7 @@ Plus an **About screen** (overlay, reachable from header/footer): app name, logo
 
 ### Screen 5: Dedicated Results & Analysis Screen
 * **Purpose:** Display calculated Right and Left ABI scores, interactive gauge visualizers, and export options.
-* **Computation rule:** every site uses its **average of 3 readings**; reference = higher arm average. ($\text{ABI} = \frac{\text{Average Ankle Systolic}}{\text{Average Arm Systolic}}$).
+* **Computation rule:** every site uses its **average of valid readings** (a reading >30% off the median is dropped; 2+ outliers reject the set); reference = higher arm average. ($\text{ABI} = \frac{\text{Average Ankle Systolic}}{\text{Average Arm Systolic}}$).
 * **Key Components:**
   * **Method & posture recap:** shows Automatic/Manual method used.
   * **Reference Arm Display:** Identifies the higher arm average used as the common denominator.
@@ -126,7 +127,7 @@ Plus an **About screen** (overlay, reachable from header/footer): app name, logo
 
 1. **Header Disclaimer Banner:** mandatory non-diagnosis notice.
 2. **Metadata:** Date, time, session log ID, **measurement method**, positioning note (supine, rested a full 10 minutes), app version.
-3. **Data Summary Table:** per site — readings 1·2·3 plus **site average** (Right/Left Arm with Reference identified; Right/Left Ankle consolidated above malleoli).
+3. **Data Summary Table:** per site — readings 1·2·3 plus **site average of valid readings** (dropped outliers struck through; Right/Left Arm with Reference identified; Right/Left Ankle consolidated above malleoli).
 4. **ABI Results Box:** Right/Left ABI + wellness category (`ABI = average ankle ÷ average arm`).
 5. **Notes & Signature Field:** personal wellness observations.
 
@@ -140,4 +141,4 @@ Plus an **About screen** (overlay, reachable from header/footer): app name, logo
 * **Text:** `#0F172A` / `#475569` / `#64748B`.
 
 ## 7. Implementation Notes
-Multi-screen PWA (HTML/JS/CSS), offline-first (`localStorage` + service worker), PDF via printable report window. OCR (Automatic mode only) via on-device Tesseract.js keeps the higher displayed number (systolic). Rest timer uses Web Audio beeps.
+Multi-screen PWA (HTML/JS/CSS), offline-first (`localStorage` + service worker), PDF via printable report window. OCR (Automatic mode only) via on-device Tesseract.js keeps the higher displayed number (systolic). Timestamp-based rest timer (background-tab safe) with Web Audio beeps.
