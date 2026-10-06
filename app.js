@@ -3,7 +3,7 @@ const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const LS_SESSIONS = 'vascflow.sessions.v1';
 const LS_DRAFT = 'vascflow.draft.v2'; // v2: no default method — stale v1 auto-default drafts are ignored
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.0.2';
 
 /* Migrate legacy ABI Tracker keys once */
 try {
@@ -70,29 +70,27 @@ function beep5() { for (let i = 0; i < 5; i++) beep(880, 0.25, i * 0.45); }
 
 /* ---------- 10-minute supine rest timer (Screen 0) ---------- */
 const REST_SECONDS = 600;
-let restLeft = REST_SECONDS, restHandle = null;
+let restEndAt = 0, restHandle = null; // timestamp-based: immune to background-tab throttling
 function fmtClock(s) { return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
 function startRestTimer() {
   if (!method) { toast('Select Automatic or Manual first'); return; }
   stopRestTimer();
-  restLeft = REST_SECONDS;
+  restEndAt = Date.now() + REST_SECONDS * 1000;
   $('#restTimerBox').hidden = false;
   $('#startRestBtn').disabled = true;
-  $('#restClock').textContent = fmtClock(restLeft);
+  $('#restClock').textContent = fmtClock(REST_SECONDS);
   $('#restStatus').textContent = 'Timer running — stay flat and still. You will auto-advance when it reaches zero.';
   restHandle = setInterval(() => {
-    restLeft -= 1;
+    const restLeft = Math.max(0, Math.round((restEndAt - Date.now()) / 1000));
+    $('#restClock').textContent = fmtClock(restLeft);
     if (restLeft <= 0) {
       stopRestTimer();
-      $('#restClock').textContent = '00:00';
       $('#restStatus').textContent = 'Rest complete — 10 minutes supine. Moving to Arm Pressures.';
       $('#startRestBtn').disabled = false;
       beep5(); toast('10 minutes up ✓ — starting Arm Pressures');
       if (currentScreen === 0) setTimeout(() => gotoScreen(1), 1500);
-      return;
     }
-    $('#restClock').textContent = fmtClock(restLeft);
-  }, 1000);
+  }, 250);
 }
 function stopRestTimer() { if (restHandle) { clearInterval(restHandle); restHandle = null; } }
 
@@ -152,11 +150,13 @@ function gotoScreen(n) {
   });
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (n === 5) renderResults();
+  if (n === 6) renderTrends();
   persistDraft();
 }
 $$('[data-goto-btn]').forEach(b => b.addEventListener('click', () => gotoScreen(+b.dataset.gotoBtn)));
 $$('.wizard-steps .step').forEach(st => st.addEventListener('click', () => {
   const target = +st.dataset.goto;
+  if (target === 6) { gotoScreen(6); return; } // Trends need no inputs — always viewable
   if (target > 0 && currentScreen === 0 && !method) { toast('Select Automatic or Manual first'); showErr('err0', 'Please select Automatic or Manual first — this starts your 10-minute rest timer.'); return; }
   if (target <= currentScreen || validateUpTo(currentScreen)) gotoScreen(target);
 }));
@@ -225,7 +225,9 @@ FIELDS.forEach(id => {
 
 function persistDraft() {
   const d = { method }; FIELDS.forEach(f => d[f] = $('#' + f).value);
-  d.notes = $('#notes').value; save(LS_DRAFT, d);
+  d.notes = $('#notes').value;
+  const sp = $('#samePatient'); if (sp) d.samePatient = sp.checked;
+  save(LS_DRAFT, d);
 }
 function restoreDraft() {
   const d = load(LS_DRAFT, null);
@@ -233,6 +235,7 @@ function restoreDraft() {
     if (d.method) method = d.method;
     FIELDS.forEach(f => { if (d[f] !== undefined) $('#' + f).value = d[f]; });
     if (d.notes) $('#notes').value = d.notes;
+    if (d.samePatient) $('#samePatient').checked = true;
   }
   setMethod(method, true); refreshAvgBadges();
 }
@@ -359,6 +362,116 @@ $('#resetAllBtn').addEventListener('click', () => {
   clearInputs(); gotoScreen(0); toast('Cleared');
 });
 $('#newCalcBtn').addEventListener('click', () => { clearInputs(); gotoScreen(0); });
+$('#toTrendsBtn').addEventListener('click', () => gotoScreen(6));
+$('#trendsHistBtn').addEventListener('click', () => { renderHistory(); $('#historyOverlay').hidden = false; });
+$('#samePatient').addEventListener('change', () => { persistDraft(); renderTrends(); });
+
+/* ---------- Trends: animated ABI-over-time graphs ---------- */
+const trendRaf = {};
+function shortDate(t) {
+  const d = new Date(t);
+  return isNaN(d) ? '?' : (d.getMonth() + 1) + '/' + d.getDate();
+}
+function trendPoints(key) {
+  return getSessions()
+    .map((s, i) => ({ t: s.ts || Date.parse(s.date) || i, v: parseFloat(s[key]), id: s.id }))
+    .filter(p => Number.isFinite(p.v))
+    .sort((a, b) => a.t - b.t);
+}
+function renderTrends() {
+  const ptsR = trendPoints('rABI'), ptsL = trendPoints('lABI');
+  const body = $('#trendsBody'), msg = $('#trendsMsg');
+  if (!$('#samePatient').checked) {
+    body.hidden = true;
+    msg.textContent = 'Confirm above that the saved sessions are for the same person to unlock the graphs.';
+    return;
+  }
+  if (!ptsR.length) {
+    body.hidden = true;
+    msg.textContent = 'No saved sessions yet — finish a calculation on the Results screen, then Save Session.';
+    return;
+  }
+  body.hidden = false;
+  msg.textContent = ptsR.length < 2
+    ? 'Only one session so far — save more sessions to grow the trend lines.'
+    : `${ptsR.length} sessions · ${shortDate(ptsR[0].t)} → ${shortDate(ptsR[ptsR.length - 1].t)} (x-axis auto-scaled)`;
+  drawTrend($('#trendR'), ptsR, '#2563EB');
+  drawTrend($('#trendL'), ptsL, '#2563EB');
+}
+function drawTrend(canvas, pts, lineColor) {
+  if (trendRaf[canvas.id]) cancelAnimationFrame(trendRaf[canvas.id]);
+  const dpr = window.devicePixelRatio || 1;
+  const W = Math.max(280, canvas.clientWidth || (canvas.parentElement && canvas.parentElement.clientWidth) || 600);
+  const H = 220, L = 38, R = 10, T = 12, B = 26;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  const vals = pts.map(p => p.v);
+  const lo = Math.max(0, Math.min(0.85, ...vals.map(v => v - 0.12)));
+  const hi = Math.max(1.55, ...vals.map(v => v + 0.06));
+  let t0 = pts[0].t, t1 = pts[pts.length - 1].t;
+  if (!(t1 > t0)) { t0 -= 86400000; t1 += 86400000; }
+  const X = t => L + (t - t0) / (t1 - t0) * (W - L - R);
+  const Y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+  const BANDS = [
+    { a: lo, b: 0.90, c: 'rgba(244,63,94,0.10)' },
+    { a: 0.90, b: 1.00, c: 'rgba(245,158,11,0.16)' },
+    { a: 1.00, b: 1.40, c: 'rgba(16,185,129,0.10)' },
+    { a: 1.40, b: hi, c: 'rgba(37,99,235,0.10)' },
+  ];
+  const tStart = performance.now(), DUR = 900, total = pts.length - 1;
+  const frame = (now) => {
+    const p = Math.min(1, (now - tStart) / DUR);
+    const e = 1 - Math.pow(1 - p, 3);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    BANDS.forEach(bd => {
+      const yA = Y(Math.min(bd.b, hi)), yB = Y(Math.max(bd.a, lo));
+      if (yB > yA + 0.5) { ctx.fillStyle = bd.c; ctx.fillRect(L, yA, W - L - R, yB - yA); }
+    });
+    ctx.font = '10px "Plus Jakarta Sans", sans-serif';
+    ctx.fillStyle = '#64748B';
+    ctx.strokeStyle = 'rgba(100,116,139,.55)'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    [0.90, 1.00, 1.40].forEach(v => {
+      if (v <= lo || v >= hi) return;
+      const y = Y(v);
+      ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(W - R, y); ctx.stroke();
+      ctx.fillText(v.toFixed(2), 4, y + 3);
+    });
+    ctx.setLineDash([]);
+    ctx.fillText(hi.toFixed(2), 4, T + 8);
+    ctx.fillText(lo.toFixed(2), 4, H - B + 2);
+    ctx.textAlign = 'center';
+    const picks = pts.length === 1 ? [0] : [...new Set([0, Math.floor(total / 3), Math.floor(2 * total / 3), total])];
+    picks.forEach(i => ctx.fillText(shortDate(pts[i].t), Math.min(Math.max(X(pts[i].t), L + 16), W - R - 16), H - 8));
+    ctx.textAlign = 'left';
+    const f = e * total;
+    if (total > 0) {
+      ctx.strokeStyle = lineColor; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(X(pts[0].t), Y(pts[0].v));
+      const k = Math.floor(f);
+      for (let i = 1; i <= Math.min(k, total); i++) ctx.lineTo(X(pts[i].t), Y(pts[i].v));
+      if (k < total) {
+        const frac = f - k;
+        ctx.lineTo(X(pts[k].t) + (X(pts[k + 1].t) - X(pts[k].t)) * frac,
+                   Y(pts[k].v) + (Y(pts[k + 1].v) - Y(pts[k].v)) * frac);
+      }
+      ctx.stroke();
+    }
+    pts.forEach((pt, i) => {
+      if (i - 1e-6 > f) return;
+      ctx.beginPath(); ctx.arc(X(pt.t), Y(pt.v), 4.5, 0, 7);
+      ctx.fillStyle = categorize(pt.v).color; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+      if (i === 0 || i === pts.length - 1) {
+        ctx.fillStyle = '#0F172A'; ctx.font = 'bold 10px "Plus Jakarta Sans", sans-serif';
+        ctx.fillText(pt.v.toFixed(2), Math.min(X(pt.t) + 8, W - 34), Y(pt.v) - 7);
+      }
+    });
+    if (p < 1) trendRaf[canvas.id] = requestAnimationFrame(frame);
+  };
+  trendRaf[canvas.id] = requestAnimationFrame(frame);
+}
 
 /* ---------- rest timer restart + about screen ---------- */
 $('#restRestartBtn').addEventListener('click', () => { startRestTimer(); toast('Rest timer restarted — 10:00'); });
@@ -378,7 +491,7 @@ $('#faqCloseBtn').addEventListener('click', () => $('#faqOverlay').hidden = true
 
 /* ---------- PDF export (print window, works offline) ---------- */
 const DISCLAIMER_LONG = 'MANDATORY NOTICE: This summary is generated for personal wellness tracking and self-reported health logging ONLY. This document is NOT a medical diagnosis or official vascular evaluation. Values are computed from user-entered or camera-scanned systolic data. The person measured should have been supine and rested a full 10 minutes. Consult a qualified clinician for any health decisions.';
-function escNotes(t) { return (t || '').replace(/</g, '&lt;'); }
+function escNotes(t) { return (t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 function openPdfReport(rep) {
   const rC = categorize(rep.rABI), lC = categorize(rep.lABI);
   const showPdfVals = (key) => rep.raw[key].map((v, i) =>

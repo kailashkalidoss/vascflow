@@ -46,6 +46,7 @@
   <div class="step" data-goto="3"><span class="dot">3</span><span class="lbl">Right Ankle ×3</span></div>
   <div class="step" data-goto="4"><span class="dot">4</span><span class="lbl">Left Ankle ×3</span></div>
   <div class="step" data-goto="5"><span class="dot">5</span><span class="lbl">Results &amp; PDF</span></div>
+  <div class="step" data-goto="6"><span class="dot">6</span><span class="lbl">Trends</span></div>
 </nav>
 
 <!-- Manual-mode OCR warning (persistent whenever manual is selected) -->
@@ -181,7 +182,7 @@
           </ul>
         </div>
         <div class="guide-media">
-          <img src="arm.gif" alt="Animation of a full arm with the cuff on the upper arm above the elbow crease" />
+          <img src="arm_left.gif" alt="Animation of a full left arm with the cuff on the upper arm above the elbow crease" />
           <p class="muted small">Cuff 1–2 cm above elbow crease.</p>
         </div>
       </div>
@@ -330,6 +331,7 @@
       <div class="action-row">
         <button class="btn primary" id="saveSessionBtn">💾 Save Session</button>
         <button class="btn secondary" id="exportPdfBtn">📄 Export PDF Report</button>
+        <button class="btn ghost" id="toTrendsBtn">📈 View Trends</button>
       </div>
 
       <h3>Session history</h3>
@@ -339,6 +341,36 @@
       <div class="nav-row">
         <button class="btn ghost" data-goto-btn="4">← Edit Input Values</button>
         <button class="btn ghost" id="newCalcBtn">↺ Start New Calculation</button>
+      </div>
+    </div>
+  </section>
+  <!-- ============ SCREEN 6: TRENDS ============ -->
+  <section id="screen-6" class="screen" aria-labelledby="s6-title">
+    <div class="card">
+      <p class="kicker">Trends · over time</p>
+      <h2 id="s6-title">ABI Trends</h2>
+      <p class="muted small">One line per leg across your saved sessions. The x-axis auto-scales to your available dates; background bands show the wellness ranges.</p>
+      <label class="confirm-card">
+        <input type="checkbox" id="samePatient" />
+        <span><strong>These saved sessions are for the same person.</strong><br />
+        <span class="muted small">Trends are only meaningful for one individual — graphs unlock when you confirm this.</span></span>
+      </label>
+      <p id="trendsMsg" class="muted"></p>
+      <div id="trendsBody" hidden>
+        <h3>Right Leg ABI over time</h3>
+        <canvas id="trendR" class="trend-canvas" height="220" aria-label="Right leg ABI trend graph"></canvas>
+        <h3>Left Leg ABI over time</h3>
+        <canvas id="trendL" class="trend-canvas" height="220" aria-label="Left leg ABI trend graph"></canvas>
+        <div class="legend">
+          <span><i class="key k-red"></i>Reduced flow (&lt;0.90)</span>
+          <span><i class="key k-amber"></i>Borderline (0.90–0.99)</span>
+          <span><i class="key k-green"></i>Normal (1.00–1.40)</span>
+          <span><i class="key k-blue"></i>High / stiff (&gt;1.40)</span>
+        </div>
+      </div>
+      <div class="nav-row">
+        <button class="btn ghost" data-goto-btn="5">← Back: Results</button>
+        <button class="btn ghost" id="trendsHistBtn">View History</button>
       </div>
     </div>
   </section>
@@ -406,9 +438,9 @@
         <p class="muted">Ankle-Brachial Index · at-home wellness log</p>
       </div>
     </div>
-    <p><strong>Version v1.0.1</strong></p>
+    <p><strong>Version v1.0.2</strong></p>
     <p>Developed by <strong>Kailash Kalidoss</strong> · <a href="https://kailashkalidoss.com" target="_blank" rel="noopener">kailashkalidoss.com</a></p>
-    <p class="muted small">© 2026 Kailash Kalidoss. All rights reserved.</p>
+    <p class="muted small">© 2026 Kailash Kalidoss. All rights reserved. Free and open source — <a href="LICENSE">MIT License</a>.</p>
     <h3>Privacy</h3>
     <p class="muted small">VascFlow stores your readings and sessions <strong>only on your device</strong> (browser localStorage). Nothing is transmitted to any server — no accounts, no analytics, no cloud copies. Clearing your browser data removes everything.</p>
     <p><button class="btn secondary small" id="privacyOpenBtn">Read full Privacy Policy</button> <button class="btn secondary small" id="faqOpenBtn">FAQs</button></p>
@@ -426,59 +458,45 @@
   <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="privacyTitle">
     <p class="kicker">Privacy policy &amp; health data disclaimer</p>
     <h2 id="privacyTitle">Privacy Policy</h2>
-    <p class="muted small"><strong>Last Updated:</strong> October 1, 2026 · <strong>Effective Date:</strong> October 1, 2026</p>
+    <p class="muted small"><strong>Last Updated:</strong> October 5, 2026 · <strong>Effective Date:</strong> October 5, 2026</p>
     <div class="privacy-body">
-      <p>Welcome to our Ankle-Brachial Index (ABI) tracking software ("we," "our," or "us"). We respect your privacy and are committed to protecting the personal and wellness information you process through our web application, AI camera scanning features, and wellness report generation tools.</p>
+      <p>VascFlow ("the app") is a free, open-source wellness tool by Kailash Kalidoss (MIT License). This policy describes in plain language what the app does — and does not do — with your information.</p>
       <h4>1. Important Medical &amp; Legal Disclaimer</h4>
       <ul>
-        <li><strong>Not a Medical Device:</strong> This application is software designed solely for personal fitness, educational, and wellness trend tracking. It is <strong>NOT</strong> a certified medical device, software as a medical device (SaMD), or diagnostic tool.</li>
-        <li><strong>No Medical Advice:</strong> The Ankle-Brachial Index (ABI) calculations, spectrum visualizations, and exportable summaries generated by this app do not constitute medical diagnosis, clinical evaluation, or treatment advice.</li>
-        <li><strong>Consult Healthcare Professionals:</strong> Always seek the advice of a qualified vascular surgeon, physician, or healthcare provider regarding any lower-extremity symptoms, peripheral artery disease (PAD) concerns, or blood pressure measurements.</li>
-        <li><strong>Not Covered by HIPAA:</strong> Unless explicitly bound by a separate enterprise business associate agreement (BAA), this app operates as a direct-to-consumer wellness application and is not a "Covered Entity" under the Health Insurance Portability and Accountability Act (HIPAA).</li>
+        <li><strong>Not a medical device.</strong> This app is for personal wellness tracking and self-reported health logging only. It is <strong>NOT</strong> a certified medical device, Software as a Medical Device (SaMD), or a diagnostic tool.</li>
+        <li><strong>No medical advice.</strong> ABI calculations, gauges, categories, and PDF reports do not constitute diagnosis, clinical evaluation, or treatment advice.</li>
+        <li><strong>Consult a clinician.</strong> Always seek the advice of a qualified physician or vascular specialist regarding leg pain, circulation concerns, or blood pressure readings.</li>
+        <li><strong>Not covered by HIPAA.</strong> VascFlow is a direct-to-consumer wellness app with no healthcare-provider relationship and no Business Associate Agreement, so it is not a HIPAA "Covered Entity."</li>
       </ul>
-      <h4>2. Information We Collect</h4>
-      <p>We collect information directly from you when you interact with the application:</p>
-      <p><strong>A. Wellness &amp; Measurement Data</strong></p>
+      <h4>2. Your data stays on your device</h4>
       <ul>
-        <li><strong>Blood Pressure Inputs:</strong> Systolic and diastolic readings manually entered or captured for the right/left arms and right/left ankles (Dorsalis Pedis and Posterior Tibial pulse points).</li>
-        <li><strong>Calculated Metrics:</strong> Calculated ABI ratios, risk category spectrum placements, and historical measurement timestamps.</li>
+        <li><strong>Local-only storage.</strong> All readings, averages, session history, notes, and drafts are stored exclusively in your browser's <code>localStorage</code> on your own device. There is <strong>no backend, no user accounts, no cloud sync, no servers</strong>.</li>
+        <li><strong>Nothing is transmitted.</strong> The app itself never sends your measurements anywhere. Clearing your browser's site data permanently deletes everything.</li>
+        <li><strong>PDF reports are generated locally</strong> in your browser via the print dialog. Saving, printing, or sharing a report is your own action on your own device.</li>
       </ul>
-      <p><strong>B. Camera &amp; Optical Images (Gemini Vision OCR)</strong></p>
+      <h4>3. Camera / OCR is on-device</h4>
       <ul>
-        <li><strong>Temporary Processing:</strong> When you use our camera scanning feature to capture blood pressure display monitors or analog dials, the image is transmitted securely to our AI vision processor (e.g. Google Gemini API) for optical character recognition (OCR).</li>
-        <li><strong>No Image Retention:</strong> Camera feeds and uploaded display photos are processed transiently in memory to extract numerical values and are <strong>never permanently stored</strong> on our servers or used to train public AI models.</li>
+        <li>In Automatic mode, the app uses <strong>Tesseract.js</strong>, an open-source OCR engine that runs <strong>entirely in your browser</strong>. Photos are processed in local memory and are <strong>never uploaded to any server</strong>.</li>
+        <li>One honest nuance: the Tesseract.js library file itself is fetched from a public CDN (cdn.jsdelivr.net) on first camera use, then cached for offline use. <strong>No measurement data is ever sent to the CDN</strong> — it only serves the library code.</li>
+        <li>In Manual mode the camera is never activated.</li>
       </ul>
-      <p><strong>C. Technical &amp; Usage Data</strong></p>
+      <h4>4. What we do NOT collect</h4>
+      <p>No accounts, no analytics, no tracking pixels, no advertising, no payments. The app code collects no IP addresses, device fingerprints, or usage telemetry.</p>
+      <h4>5. Permissions</h4>
       <ul>
-        <li><strong>Device &amp; Browser Data:</strong> Standard log information, including browser type, operating system, and IP address for system performance and security.</li>
-        <li><strong>Local Storage Data:</strong> If you use local storage on your device, your measurement history resides on your client browser until cleared.</li>
+        <li><strong>Camera</strong> is requested only when you tap a scan button in Automatic mode, solely to capture the monitor display. You confirm every suggested number — nothing is accepted automatically.</li>
+        <li>The app never requests microphone, location, or contacts access.</li>
       </ul>
-      <h4>3. How We Use Your Information</h4>
-      <ol>
-        <li><strong>Delivering Core App Functionality:</strong> Calculating ABI scores, plotting spectrum gauges, displaying trend charts, and generating exportable PDF reports.</li>
-        <li><strong>AI Optical Extraction:</strong> Processing camera snapshots to automatically populate blood pressure input fields.</li>
-        <li><strong>Application Security &amp; Improvements:</strong> Monitoring system performance, diagnosing bugs, and preventing unauthorized system access.</li>
-      </ol>
-      <h4>4. How We Share &amp; Disclose Information</h4>
-      <p><strong>We do NOT sell, rent, or trade your personal wellness data or health metrics to third parties or advertising networks.</strong></p>
+      <h4>6. Your data rights</h4>
       <ul>
-        <li><strong>Service Processors &amp; Infrastructure Providers:</strong> Bound cloud hosting (e.g. Vercel, Netlify), payment gateways (e.g. Stripe for processing subscriptions), and AI vision API providers acting on our behalf under strict data protection agreements.</li>
-        <li><strong>At Your Explicit Direction:</strong> When you download or email an exportable PDF report to share with your personal healthcare team.</li>
-        <li><strong>Legal Compliance:</strong> To satisfy valid legal processes, court orders, or statutory obligations if required by applicable law.</li>
+        <li>View all sessions in <strong>Session History</strong>; regenerate any session's PDF.</li>
+        <li>Delete all history with <strong>Clear history</strong> in the app.</li>
+        <li>Wipe everything via your browser's site-data / storage settings.</li>
       </ul>
-      <h4>5. Data Security &amp; Storage Options</h4>
-      <ul>
-        <li><strong>Local-First Privacy:</strong> By default, your individual blood pressure entries and ABI history are stored locally in your browser's <code>localStorage</code>. You retain total control to clear this data at any time.</li>
-        <li><strong>Encryption Standards:</strong> All web traffic and API transmissions are encrypted using standard Transport Layer Security (TLS 1.3).</li>
-      </ul>
-      <h4>6. Your Data Rights &amp; Choices</h4>
-      <ul>
-        <li><strong>Right to Access &amp; Portability:</strong> You can view all logged readings on your dashboard or export them to a PDF report at any time.</li>
-        <li><strong>Right to Erasure (Deletion):</strong> You can delete your calculation history directly within the app settings or clear your browser site data.</li>
-        <li><strong>Opt-Out of Camera Processing:</strong> Use of the AI camera scanner is entirely optional; you can manually input all blood pressure readings without activating camera permissions.</li>
-      </ul>
-      <h4>7. Contact Us &amp; Issue Reporting</h4>
-      <p>If you have questions, feedback, data privacy requests, or need to report an issue regarding this application, please contact us at: <strong>Email:</strong> me@kailashkalidoss.com</p>
+      <h4>7. Open source — verify it yourself</h4>
+      <p>Source code: <a href="https://github.com/kailashkalidoss/vascflow" target="_blank" rel="noopener">github.com/kailashkalidoss/vascflow</a> (MIT License). You don't have to take this policy on faith — you can read the code and confirm exactly what the app does.</p>
+      <h4>8. Contact</h4>
+      <p>Questions, feedback, or privacy requests: <strong>me@kailashkalidoss.com</strong></p>
     </div>
     <div class="bo-actions">
       <button class="btn primary small" id="privacyCloseBtn">Close</button>
@@ -499,6 +517,10 @@
       <details>
         <summary>Why must I lie completely flat for 10 minutes?</summary>
         <p>Gravity affects pressure readings. Lying flat keeps your <strong>ankles and heart at the same level</strong>, and 10 minutes of quiet rest lets circulation settle — so arm and ankle readings are comparable. Do not sit up between readings.</p>
+      </details>
+      <details>
+        <summary>What changed in v1.0.2?</summary>
+        <p>All placement guides are now <strong>animated professional illustrations</strong> — supine positioning (traveling level-line pulse), arm and ankle cuff placement (pulsing cuff glow and markers), plus a <strong>dedicated left-arm guide</strong>. The app is now <strong>MIT open-source</strong> (see About), the <strong>privacy policy was rewritten</strong> to describe exactly what the app does, and the <strong>rest timer stays accurate</strong> even if the browser tab is backgrounded.</p>
       </details>
       <details>
         <summary>Why 3 readings at every site?</summary>
@@ -537,6 +559,10 @@
         <p>Every entry in <strong>Session history</strong> (Results screen) and the <strong>History</strong> popup has its own <strong>📄 PDF</strong> button — it regenerates that session's full report (readings, averages, ABI scores, notes) with its original date and session ID, ready to print or save as PDF.</p>
       </details>
       <details>
+        <summary>How do I see my ABI trend over time?</summary>
+        <p>Open <strong>📈 View Trends</strong> (Results screen, or the Trends tab). Confirm the saved sessions are <strong>for the same person</strong> — trends are only meaningful for one individual — and you'll get animated line graphs for each leg across all sessions, with the x-axis auto-scaled to your dates and the wellness ranges shaded behind the lines.</p>
+      </details>
+      <details>
         <summary>How do I share results with my health care provider?</summary>
         <p>Use <strong>Export PDF Report</strong> on the Results screen. It includes the disclaimer, date/session ID, all readings with site averages, both ABI scores, your notes, and a signature field — print it or save as PDF to bring to appointments.</p>
       </details>
@@ -549,7 +575,7 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-<footer><p>© 2026 Kailash Kalidoss · VascFlow v1.0.1 · <a href="#" id="aboutLink">About</a> · <a href="#" id="faqLink">FAQ</a> · works offline · data stays in this browser (localStorage) · wellness only, not a medical device</p></footer>
+<footer><p>© 2026 Kailash Kalidoss · VascFlow v1.0.2 · <a href="#" id="aboutLink">About</a> · <a href="#" id="faqLink">FAQ</a> · works offline · data stays in this browser (localStorage) · wellness only, not a medical device</p></footer>
 
 <script src="app.js"></script>
 <script>

@@ -1,5 +1,5 @@
-const CACHE = 'vascflow-v14';
-const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.json', './icon.svg', './supine.gif', './arm.gif', './ankle.gif'];
+const CACHE = 'vascflow-v19';
+const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.json', './icon.svg', './supine.gif', './arm.gif', './arm_left.gif', './ankle.gif'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
 });

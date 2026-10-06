@@ -1,5 +1,15 @@
 # VascFlow — Revision History
 
+## v1.0.2 — 2026-10-06
+Polish release. Same features and measurement rules as v1.0.1.
+
+- **Illustrated animated guides:** supine, arm, and ankle guides are now animated versions of professional illustrations — traveling level-line pulse, pulsing cuff glow, and blinking placement markers — plus a **dedicated animated left-arm guide** (`left_arm.jpeg`).
+- **MIT License** added and linked from the About screen.
+- **Privacy policy rewritten** (Oct 5, 2026) to describe exactly what the app does — local-only storage, on-device OCR, no collection — and synced into the in-app Privacy screen.
+- **README refreshed** (open-source, privacy, offline nuances, 6-screen flow).
+- **Hardened internals:** timestamp-based rest timer immune to background-tab throttling; full HTML escaping of notes in PDF reports.
+- **Trends screen:** same-patient-gated animated ABI-over-time line graphs per leg, auto-scaled x-axis, visual range bands.
+
 ## v1.0.1 — 2026-10-03
 Second release. Wizard flow, measurement rules, guides, reporting, and legal screens.
 
