@@ -1,4 +1,4 @@
-# VascFlow — Ankle-Brachial Index Wellness Log
+# VascFlow — Ankle-Brachial Index · Know your flow, wherever you are
 
 > ⚠️ **Wellness tracking only — NOT a medical device.** Do not use for diagnosis or
 > treatment decisions. The person being measured should be supine, rested & calm.
