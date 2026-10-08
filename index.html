@@ -7,14 +7,31 @@
 <meta name="description" content="VascFlow: at-home personal wellness tracking for arm and ankle systolic pressures with ABI calculation, history and PDF export. Not a medical device." />
 <meta name="theme-color" content="#2563EB" />
 <link rel="manifest" href="manifest.json" />
+<link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48" />
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
 <link rel="icon" type="image/svg+xml" href="icon.svg" />
-<link rel="apple-touch-icon" href="icon.svg" />
+<link rel="apple-touch-icon" href="icon-192.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+
+<!-- SPLASH / INTRO SCREEN (auto-advances to Setup) -->
+<div id="splash" role="status" aria-label="VascFlow loading">
+  <div class="splash-inner">
+    <div class="splash-brand">
+      <span class="logo splash-logo" aria-hidden="true"><img src="logo.png" alt="" /></span>
+      <div class="splash-text">
+        <h1 class="splash-title">VascFlow</h1>
+        <p class="splash-sub">Ankle-Brachial Index · Know your flow, wherever you are</p>
+      </div>
+    </div>
+    <div class="splash-loader" aria-hidden="true"><span></span></div>
+    <p class="splash-copy">© 2026 Kailash Kalidoss. All rights reserved.</p>
+  </div>
+</div>
 
 <!-- GLOBAL DISCLAIMER BANNER (persistent, all screens) -->
 <div class="disclaimer-banner" role="note" aria-label="Wellness disclaimer">
@@ -24,10 +41,10 @@
 
 <header class="topbar">
   <div class="brand">
-    <span class="logo" aria-hidden="true">🌊</span>
+    <span class="logo" aria-hidden="true"><img src="logo.png" alt="" /></span>
     <div>
       <h1>VascFlow</h1>
-      <p>Ankle-Brachial Index · at-home wellness log</p>
+      <p>Ankle-Brachial Index · Know your flow, wherever you are</p>
     </div>
   </div>
   <div class="top-actions">
@@ -432,10 +449,10 @@
 <div id="aboutOverlay" class="overlay" hidden>
   <div class="overlay-card about-card" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
     <div class="about-brand">
-      <span class="logo" aria-hidden="true">🌊</span>
+      <span class="logo" aria-hidden="true"><img src="logo.png" alt="" /></span>
       <div>
         <h2 id="aboutTitle">VascFlow</h2>
-        <p class="muted">Ankle-Brachial Index · at-home wellness log</p>
+        <p class="muted">Ankle-Brachial Index · Know your flow, wherever you are</p>
       </div>
     </div>
     <p><strong>Version v1.0.2</strong></p>

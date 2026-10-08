@@ -620,6 +620,21 @@ $('#scanApplyBtn').addEventListener('click', () => {
   applyScanValue(v);
 });
 
+/* ---------- splash / intro (auto-advances to Screen 0; tap to skip) ---------- */
+(function splash() {
+  const el = $('#splash');
+  if (!el) return;
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let done = false;
+  const hide = () => {
+    if (done) return; done = true;
+    el.classList.add('hide');
+    setTimeout(() => { el.hidden = true; }, 500);
+  };
+  el.addEventListener('click', hide);
+  setTimeout(hide, reduce ? 600 : 4000);
+})();
+
 /* ---------- init ---------- */
 try {
   restoreDraft();

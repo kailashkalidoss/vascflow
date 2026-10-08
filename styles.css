@@ -22,7 +22,8 @@ body{margin:0;font-family:"Plus Jakarta Sans",Inter,system-ui,-apple-system,"Seg
 .manual-banner[hidden]{display:none}
 .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 32px;background:var(--surface);border-bottom:1px solid var(--line);flex-wrap:wrap}
 .brand{display:flex;gap:12px;align-items:center}
-.logo{font-size:28px;background:linear-gradient(135deg,#2563EB,#1D4ED8);width:52px;height:52px;display:grid;place-items:center;border-radius:16px;box-shadow:0px 4px 12px rgba(37,99,235,.25)}
+.logo{background:#fff;width:52px;height:52px;display:grid;place-items:center;border-radius:16px;box-shadow:0px 4px 12px rgba(37,99,235,.25);overflow:hidden;flex-shrink:0}
+.logo img{width:100%;height:100%;object-fit:cover;display:block}
 .brand h1{margin:0;font-size:24px;font-weight:700;letter-spacing:-.01em}
 .brand p{margin:0;color:var(--ink-2);font-size:13px}
 .top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -154,5 +155,28 @@ footer a{color:var(--primary);font-weight:600}
 .chips button{border:1px solid var(--primary);background:var(--primary-soft);color:var(--primary-deep);border-radius:9999px;padding:6px 12px;font-weight:700;cursor:pointer;font-family:inherit}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(20px);background:#0F172A;color:#fff;padding:11px 18px;border-radius:9999px;opacity:0;transition:.3s;z-index:60;font-size:14px;max-width:90vw}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* splash / intro */
+#splash{position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:linear-gradient(160deg,#2563EB,#1D4ED8);transition:opacity .45s ease}
+#splash.hide{opacity:0;pointer-events:none}
+#splash[hidden]{display:none}
+.splash-inner{text-align:center;color:#fff;padding:24px;max-width:480px}
+.splash-brand{display:flex;align-items:center;justify-content:center;gap:20px;text-align:left}
+.splash-logo{width:96px;height:96px;border-radius:24px;animation:logoPop .7s cubic-bezier(.2,1.4,.4,1) .1s backwards,glowPulse 2.2s ease-in-out 1s infinite}
+@keyframes logoPop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
+@keyframes glowPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.22)}50%{box-shadow:0 0 0 16px rgba(255,255,255,0)}}
+.splash-text{min-width:0}
+.splash-title{margin:0;font-size:40px;font-weight:700;letter-spacing:-.02em;opacity:0;transform:translateY(12px);animation:riseIn .6s ease .45s forwards}
+.splash-sub{margin:4px 0 0;font-size:14px;opacity:0;animation:fadeIn .6s ease .8s forwards;color:#dbeafe}
+.splash-loader{width:min(280px,60vw);height:4px;background:rgba(255,255,255,.25);border-radius:9999px;margin:28px auto 0;overflow:hidden}
+.splash-loader span{display:block;height:100%;width:0;background:#fff;border-radius:inherit;animation:loadFill 3.2s linear .3s forwards}
+@keyframes loadFill{to{width:100%}}
+.splash-copy{margin:18px 0 0;font-size:12px;opacity:0;animation:fadeIn .6s ease 1.1s forwards;color:#bfdbfe}
+@media(max-width:420px){.splash-brand{gap:14px}.splash-logo{width:72px;height:72px;font-size:40px;border-radius:18px}.splash-title{font-size:32px}}
+@keyframes riseIn{to{opacity:1;transform:none}}
+@keyframes fadeIn{to{opacity:1}}
+@media (prefers-reduced-motion: reduce){
+  .splash-logo{animation-duration:.01s}
+  .splash-title,.splash-sub,.splash-copy{animation-duration:.01s}
+}
 footer{text-align:center;color:var(--muted);font-size:13px;padding:18px}
 code{background:var(--surface-low);padding:1px 6px;border-radius:6px;font-size:13px}
